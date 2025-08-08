@@ -1,26 +1,21 @@
-// lib/supabase-server.ts
-import { cookies } from "next/headers"
-import { createServerClient, type CookieOptions } from "@supabase/ssr"
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 
 export function supabaseServer() {
-  const store = cookies()
-
+  const cookieStore = cookies();
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return store.get(name)?.value
+        // Next 14 + @supabase/ssr current API
+        getAll() {
+          return cookieStore.getAll();
         },
-        set(name: string, value: string, options: CookieOptions) {
-          store.set({ name, value, ...options })
+        setAll() {
+          // no-op in server components / route handlers that aren’t mutating
         },
-        remove(name: string, options: CookieOptions) {
-          // Clearing cookie: set empty value with same options
-          store.set({ name, value: "", ...options })
-        }
-      }
+      },
     }
-  )
+  );
 }
