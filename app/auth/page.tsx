@@ -13,7 +13,7 @@ export default function AuthPage() {
     e.preventDefault()
     await sb.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${location.origin}` }
+      options: { emailRedirectTo: `${location.origin}/auth/confirm` }
     })
     setSent(true)
   }
@@ -21,12 +21,18 @@ export default function AuthPage() {
   async function signInGoogle() {
     await sb.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${location.origin}` }
+      options: { redirectTo: `${location.origin}/auth/confirm` }
     })
   }
 
   async function signOut() {
     await sb.auth.signOut()
+    await fetch("/auth/callback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ event: "SIGNED_OUT", session: null }),
+    })
     location.href = "/"
   }
 
@@ -42,6 +48,8 @@ export default function AuthPage() {
             placeholder="you@email.com"
             value={email}
             onChange={(e)=>setEmail(e.target.value)}
+            type="email"
+            required
           />
           <Button type="submit" className="w-full">Email magic link</Button>
         </form>

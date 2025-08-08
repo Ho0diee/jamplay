@@ -43,6 +43,10 @@ export async function POST(req: Request) {
       refresh_token: session.refresh_token,
     });
     res.headers.set("x-set-session", error ? "error" : "ok");
+  } else if (event === "SIGNED_OUT") {
+    // Clear HttpOnly cookies
+    const { error } = await supabase.auth.signOut();
+    res.headers.set("x-signout", error ? "error" : "ok");
   } else {
     res.headers.set("x-set-session", "skipped");
   }

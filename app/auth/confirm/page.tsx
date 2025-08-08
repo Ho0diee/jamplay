@@ -14,20 +14,36 @@ export default function AuthConfirm() {
 
   useEffect(() => {
     (async () => {
-      // Exchange the ?code=… in this URL for a session
-      const { data } = await supabase.auth.exchangeCodeForSession(window.location.href);
+      let session = null;
 
-      // Sync session to server cookies
-      if (data?.session) {
+      // CASE A: implicit flow => tokens in the URL hash
+      if (typeof window !== "undefined" && window.location.hash.includes("access_token=")) {
+        const h = new URLSearchParams(window.location.hash.slice(1));
+        const access_token = h.get("access_token") || undefined;
+        const refresh_token = h.get("refresh_token") || undefined;
+        if (access_token && refresh_token) {
+          const { data } = await supabase.auth.setSession({ access_token, refresh_token });
+          session = data?.session ?? null;
+        }
+      }
+
+      // CASE B: PKCE flow => ?code= in the query string
+      if (!session && typeof window !== "undefined" && window.location.search.includes("code=")) {
+        const { data } = await supabase.auth.exchangeCodeForSession(window.location.href);
+        session = data?.session ?? null;
+      }
+
+      // Sync to server cookies so server actions can see you
+      if (session) {
         await fetch("/auth/callback", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ event: "SIGNED_IN", session: data.session }),
+          body: JSON.stringify({ event: "SIGNED_IN", session }),
         });
       }
 
-      // Send the user somewhere useful
+      // Send user somewhere useful
       router.replace("/create");
     })();
   }, [router]);
