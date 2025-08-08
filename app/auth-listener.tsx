@@ -19,17 +19,20 @@ export default function AuthListener() {
       });
     };
 
-    // 1) Force the OAuth code->session exchange after Google redirect
-    supabase.auth.exchangeCodeForSession().then(({ data }) => {
-      if (data?.session) sync("SIGNED_IN", data.session); // immediately sync cookies
-    });
+    // 1) After Google redirects back, exchange ?code=... for a session
+    // (Only try if the URL actually has a code param)
+    if (typeof window !== "undefined" && window.location.search.includes("code=")) {
+      supabase.auth.exchangeCodeForSession(window.location.href).then(({ data }) => {
+        if (data?.session) sync("SIGNED_IN", data.session); // set HttpOnly cookies ASAP
+      });
+    }
 
-    // 2) Send initial session (may be null on first load)
+    // 2) Send current session (if any) to the server
     supabase.auth.getSession().then(({ data }) => {
       if (data?.session) sync("INITIAL_SESSION", data.session);
     });
 
-    // 3) Keep syncing on any auth changes
+    // 3) Keep syncing on changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       sync(event, session);
     });
