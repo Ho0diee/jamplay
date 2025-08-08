@@ -1,6 +1,8 @@
+import { supabaseServer } from "@/lib/supabase-server"
+import { redirect } from "next/navigation"
 import { PromptEditor } from "@/components/editor/PromptEditor"
 import { Button } from "@/components/ui/button"
-import { createGame, uploadVersion, publishGame } from "@/app/server-actions"
+import { createGame } from "@/app/server-actions"
 
 const starter = {
   meta: { title: "New Game", ageRating: "E", tags: ["starter"] },
@@ -11,6 +13,10 @@ const starter = {
 }
 
 export default async function CreatePage() {
+  const sb = supabaseServer()
+  const { data: { session } } = await sb.auth.getSession()
+  if (!session) redirect("/auth")
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Creator Dashboard</h1>
@@ -23,7 +29,6 @@ export default async function CreatePage() {
           <input type="hidden" name="tags" value='["starter"]'/>
           <Button type="submit">Create Game</Button>
         </form>
-        {/* Upload + Publish flows are demonstrated by server actions; real UI would be richer */}
       </div>
     </div>
   )
