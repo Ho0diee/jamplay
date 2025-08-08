@@ -19,15 +19,18 @@ export default function AuthListener() {
       });
     };
 
-    // Send the initial session on first load (this was missing before)
-    supabase.auth.getSession().then(({ data }) => {
-      sync("INITIAL_SESSION", data.session);
+    // 1) Force the OAuth code->session exchange after Google redirect
+    supabase.auth.exchangeCodeForSession().then(({ data }) => {
+      if (data?.session) sync("SIGNED_IN", data.session); // immediately sync cookies
     });
 
-    // Keep syncing on changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    // 2) Send initial session (may be null on first load)
+    supabase.auth.getSession().then(({ data }) => {
+      if (data?.session) sync("INITIAL_SESSION", data.session);
+    });
+
+    // 3) Keep syncing on any auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       sync(event, session);
     });
 
