@@ -2,6 +2,7 @@
   "name": "jamplay",
   "version": "0.1.0",
   "private": true,
+  "engines": { "node": "20.x" },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -21,7 +22,8 @@
     "@radix-ui/react-separator": "1.0.3",
     "@radix-ui/react-slot": "1.0.2",
     "@supabase/supabase-js": "2.47.10",
-    "@uploadthing/react": "7.2.0",
+    "@supabase/ssr": "0.5.0",
+    "@uploadthing/react": "6.7.0",
     "class-variance-authority": "0.7.0",
     "clsx": "2.1.1",
     "date-fns": "3.6.0",
@@ -31,11 +33,10 @@
     "sonner": "1.5.0",
     "tailwind-merge": "2.5.2",
     "tailwindcss-animate": "1.0.7",
-    "uploadthing": "7.2.0",
+    "uploadthing": "6.7.0",
     "zod": "3.23.8"
   },
   "devDependencies": {
-    "@supabase/ssr": "0.5.0"
     "@playwright/test": "1.46.1",
     "@types/node": "20.14.12",
     "@types/react": "18.3.3",
