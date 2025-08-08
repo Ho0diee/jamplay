@@ -2,7 +2,7 @@ import "./globals.css";
 import Image from "next/image";
 import Link from "next/link";
 import AuthListener from "./auth-listener";
-import ServerWhoAmI from "@/components/ServerWhoAmI";
+// no change to AuthListener; removing temporary debug banner
 
 export const metadata = {
   title: "JamPlay",
@@ -13,9 +13,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen">
-        {/* TEMP DEBUG — remove once Create Game works */}
-        <ServerWhoAmI />
-
         <AuthListener />
 
         <header className="border-b">
