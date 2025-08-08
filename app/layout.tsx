@@ -1,18 +1,37 @@
 import "./globals.css"
 import Image from "next/image"
 import Link from "next/link"
-import AuthListener from "./auth-listener" // <-- add this
+import { cookies } from "next/headers"
+import { createServerClient } from "@supabase/ssr"
 
 export const metadata = {
   title: "JamPlay",
   description: "AI Prompt Game hub",
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const cookieStore = cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll() {}, // no-op in a server component
+      },
+    }
+  )
+
+  const { data: { user }, error } = await supabase.auth.getUser()
+
   return (
     <html lang="en">
       <body className="min-h-screen">
-        <AuthListener /> {/* <-- add this */}
+        {/* TEMP DEBUG: remove after we fix create */}
+        <pre id="whoami" style={{ padding: 8, fontSize: 12, background: "#111", color: "#0f0" }}>
+          {JSON.stringify({ user, error }, null, 2)}
+        </pre>
+
         <header className="border-b">
           <div className="container flex h-14 items-center gap-6">
             <Link href="/" className="flex items-center gap-2">
