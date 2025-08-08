@@ -1,6 +1,7 @@
 import "./globals.css"
 import Image from "next/image"
 import Link from "next/link"
+import AuthListener from "./auth-listener" // <-- add this
 
 export const metadata = {
   title: "JamPlay",
@@ -11,6 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <body className="min-h-screen">
+        <AuthListener /> {/* <-- add this */}
         <header className="border-b">
           <div className="container flex h-14 items-center gap-6">
             <Link href="/" className="flex items-center gap-2">
