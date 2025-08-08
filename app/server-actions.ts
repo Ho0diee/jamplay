@@ -1,11 +1,9 @@
 "use server"
 
-import { z } from "zod"
 import { supabaseServer } from "@/lib/supabase-server"
 import { revalidatePath } from "next/cache"
 import crypto from "node:crypto"
 
-// helpers
 function slugify(s: string) {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
 }
@@ -18,7 +16,6 @@ async function getUserOrThrow() {
   return { sb, user }
 }
 
-// actions
 export async function createGame(formData: FormData) {
   const { sb, user } = await getUserOrThrow()
   const title = String(formData.get("title"))
@@ -26,14 +23,11 @@ export async function createGame(formData: FormData) {
   const age_rating = String(formData.get("age_rating"))
   const tags = JSON.parse(String(formData.get("tags") ?? "[]")) as string[]
   const thumb_url = formData.get("thumb_url") ? String(formData.get("thumb_url")) : null
-
   if (!title || !summary) throw new Error("Missing fields")
 
   const slug = slugify(title) + "-" + crypto.randomBytes(3).toString("hex")
   const { data, error } = await sb.from("games").insert({
-    owner_id: user.id,
-    title, slug, summary, tags, age_rating,
-    thumb_url, status: "draft"
+    owner_id: user.id, title, slug, summary, tags, age_rating, thumb_url, status: "draft"
   }).select().single()
   if (error) throw new Error(error.message)
 
@@ -42,19 +36,12 @@ export async function createGame(formData: FormData) {
 }
 
 export async function uploadVersion(formData: FormData) {
-  const { sb, user } = await getUserOrThrow()
+  const { sb } = await getUserOrThrow()
   const game_id = String(formData.get("game_id"))
   const version = String(formData.get("version") ?? "0.1.0")
   const zip_url = String(formData.get("zip_url"))
-
-  // owner check via RLS + FK
   const { data, error } = await sb.from("game_versions").insert({
-    game_id, version,
-    promptscript_url: zip_url,
-    assets_zip_url: zip_url,
-    model_lock: "stub-model",
-    seed: 42,
-    notes: "uploaded"
+    game_id, version, promptscript_url: zip_url, assets_zip_url: zip_url, model_lock: "stub-model", seed: 42, notes: "uploaded"
   }).select().single()
   if (error) throw new Error(error.message)
   revalidatePath(`/game/${game_id}`)
@@ -66,7 +53,6 @@ export async function publishGame(formData: FormData) {
   const game_id = String(formData.get("game_id"))
   const { data: game, error: e1 } = await sb.from("games").select("*").eq("id", game_id).single()
   if (e1 || !game) throw new Error(e1?.message || "Not found")
-
   const { error } = await sb.from("games").update({ status: "public" }).eq("id", game_id)
   if (error) throw new Error(error.message)
   revalidatePath(`/game/${game.slug}`)
@@ -78,8 +64,7 @@ export async function recordPlayStart(formData: FormData) {
   const game_id = String(formData.get("game_id"))
   const version_id = String(formData.get("version_id"))
   const { data, error } = await sb.from("plays").insert({
-    game_id, version_id, user_id: user.id,
-    duration_sec: 0, completed: false, cost_tokens: 0
+    game_id, version_id, user_id: user.id, duration_sec: 0, completed: false, cost_tokens: 0
   }).select().single()
   if (error) throw new Error(error.message)
   return data
