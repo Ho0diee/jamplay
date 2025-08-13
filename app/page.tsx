@@ -5,84 +5,8 @@ import Link from "next/link"
 import { Input } from "@/components/ui/input"
 import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { trendingScore, topRatedThisWeekScore } from "@/lib/rankers"
-
-type Game = {
-  id: string
-  title: string
-  description: string
-  tags: string[]
-  cover: string
-  plays48h: number
-  likes7d: { up: number; total: number }
-  likesAll: { up: number; total: number }
-  publishedAt: string // ISO
-  updatedAt: string // ISO
-}
-
-// Placeholder dataset for Discover hub
-const GAMES: Game[] = [
-  {
-    id: "g1",
-    title: "Starfall Racing",
-    description: "Drift through nebulas in a fast, friendly space racer.",
-    tags: ["racing", "space", "casual"],
-    cover: "/logo.svg",
-    plays48h: 1240,
-    likes7d: { up: 380, total: 450 },
-    likesAll: { up: 2100, total: 2600 },
-    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 20).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 3).toISOString(),
-  },
-  {
-    id: "g2",
-    title: "Mystery Manor Mini",
-    description: "Short-session whodunit puzzles with cozy vibes.",
-    tags: ["puzzle", "mystery"],
-    cover: "/logo.svg",
-    plays48h: 860,
-    likes7d: { up: 220, total: 270 },
-    likesAll: { up: 900, total: 1100 },
-    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 10).toISOString(),
-  },
-  {
-    id: "g3",
-    title: "City Lights Stories",
-    description: "Micro narrative adventures from a neon downtown.",
-    tags: ["narrative", "story"],
-    cover: "/logo.svg",
-    plays48h: 540,
-    likes7d: { up: 180, total: 220 },
-    likesAll: { up: 1400, total: 1800 },
-    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
-  },
-  {
-    id: "g4",
-    title: "Forest Song",
-    description: "Guide spirits with rhythm-based puzzles.",
-    tags: ["music", "puzzle"],
-    cover: "/logo.svg",
-    plays48h: 300,
-    likes7d: { up: 160, total: 210 },
-    likesAll: { up: 2500, total: 3000 },
-    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 40).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 30).toISOString(),
-  },
-  {
-    id: "g5",
-    title: "Codebreakers Arena",
-    description: "Crack ciphers and outsmart rivals in quick rounds.",
-    tags: ["strategy", "logic"],
-    cover: "/logo.svg",
-    plays48h: 980,
-    likes7d: { up: 300, total: 400 },
-    likesAll: { up: 1200, total: 1500 },
-    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 12).toISOString(),
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 1).toISOString(),
-  },
-]
+import { trendingScore } from "@/lib/rankers"
+import { games as GAMES, type Game } from "@/lib/demo-data"
 
 function byTrending(a: Game, b: Game) {
   return trendingScore(b) - trendingScore(a)
@@ -94,9 +18,6 @@ function byNewAndRising(a: Game, b: Game) {
   // tiebreaker by trending
   return trendingScore(b) - trendingScore(a)
 }
-function byTopRated(a: Game, b: Game) {
-  return topRatedThisWeekScore(b) - topRatedThisWeekScore(a)
-}
 
 export default function DiscoverPage() {
   const [q, setQ] = useState<string>("")
@@ -104,16 +25,15 @@ export default function DiscoverPage() {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
     if (!needle) return GAMES
-    return GAMES.filter(g =>
+    return GAMES.filter((g: Game) =>
       g.title.toLowerCase().includes(needle) ||
-      g.tags.some(t => t.toLowerCase().includes(needle))
+      g.tags.some((t: string) => t.toLowerCase().includes(needle))
     )
   }, [q])
 
   const trending = useMemo(() => [...filtered].sort(byTrending).slice(0, 6), [filtered])
   const newRising = useMemo(() => [...filtered].sort(byNewAndRising).slice(0, 6), [filtered])
-  const topRated = useMemo(() => [...filtered].sort(byTopRated).slice(0, 6), [filtered])
-  const editors = useMemo(() => trending.slice(0, 4), [trending])
+  const editors = useMemo(() => filtered.filter((g: Game) => g.editorsPick).slice(0, 6), [filtered])
   const categories = useMemo(() => {
     const counts: Record<string, number> = {}
     filtered.forEach((g: Game) => g.tags.forEach((t: string) => { counts[t] = (counts[t] ?? 0) + 1 }))
@@ -138,14 +58,13 @@ export default function DiscoverPage() {
         </div>
       </section>
 
-      <Section title="Trending now" items={trending} />
-      <Section title="New & Rising" items={newRising} />
-      <Section title="Top Rated (This Week)" items={topRated} />
+  <Section title="Trending now" items={trending} seeAllHref="/trending" />
+  <Section title="New & Rising" items={newRising} />
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-medium">Editor’s Picks</h2>
-          <Link className="text-sm underline" href="#">See all</Link>
+          <Link className="text-sm underline" href="/editors-picks">See all</Link>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {editors.map(g => (
@@ -170,12 +89,12 @@ export default function DiscoverPage() {
   )
 }
 
-function Section({ title, items }: { title: string; items: Game[] }) {
+function Section({ title, items, seeAllHref }: { title: string; items: Game[]; seeAllHref?: string }) {
   return (
     <section className="space-y-3">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-medium">{title}</h2>
-        <Link className="text-sm underline" href="#">See all</Link>
+  {seeAllHref ? <Link className="text-sm underline" href={seeAllHref}>See all</Link> : <span />}
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((g) => (
