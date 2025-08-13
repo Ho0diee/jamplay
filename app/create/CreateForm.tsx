@@ -32,6 +32,38 @@ export default function CreateForm() {
       return;
     }
     setError("");
+    // Build minimal game object for Home catalog consumption
+    const nowIso = new Date().toISOString();
+    const game: any = {
+      slug: s,
+      title: t,
+      description: t, // using title as a short tagline placeholder
+      tags: [],
+      category: undefined,
+      cover: "/logo.svg",
+      publishedAt: nowIso,
+      updatedAt: nowIso,
+      plays48h: 0,
+      likes7d: { up: 0, total: 0 },
+      likesAll: { up: 0, total: 0 },
+      editorsPick: false,
+      origin: "local",
+    };
+    try {
+      if (typeof window !== "undefined") {
+        const raw = localStorage.getItem("myGames");
+        const arr = raw ? (JSON.parse(raw) as any[]) : [];
+        const bySlug = new Map<string, any>();
+        for (const g of Array.isArray(arr) ? arr : []) {
+          const gs = (g?.slug || "").toString().toLowerCase();
+          if (gs) bySlug.set(gs, g);
+        }
+        bySlug.set(s, game); // overwrite existing with same slug
+        localStorage.setItem("myGames", JSON.stringify(Array.from(bySlug.values())));
+      }
+    } catch {
+      // ignore localStorage failures
+    }
     router.push(`/game/${s}`);
   };
 
@@ -49,7 +81,7 @@ export default function CreateForm() {
           <p className="text-xs text-neutral-500">Lowercase, numbers, and hyphens only.</p>
         </div>
         {error && <p className="text-sm text-red-600">{error}</p>}
-        <Button type="submit">Continue</Button>
+  <Button type="submit">Publish</Button>
       </form>
     </Card>
   );

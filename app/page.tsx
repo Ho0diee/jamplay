@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input"
 import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { trendingScore } from "@/lib/rankers"
-import { games as GAMES, type Game } from "@/lib/demo-data"
+import { type Game } from "@/lib/demo-data"
 import { filterByCategory } from "@/lib/filters"
 import { CategoryPills } from "@/components/CategoryPills"
+import SortSelect, { type SortValue } from "@/components/SortSelect"
+import { getCatalog, slugify } from "@/lib/catalog"
 
 function byTrending(a: Game, b: Game) {
   return trendingScore(b) - trendingScore(a)
@@ -27,16 +29,20 @@ export default function DiscoverPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const selectedCategory = (searchParams.get("category") || undefined) as string | undefined
+  const sort = ((searchParams.get("sort") as SortValue) || "trending") as SortValue
+
+  // Merge demo catalog with any locally published games (client only)
+  const catalog = useMemo(() => getCatalog(), [])
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    const byCategory = filterByCategory(GAMES, selectedCategory)
+    const byCategory = filterByCategory(catalog, selectedCategory)
     if (!needle) return byCategory
     return byCategory.filter((g: Game) =>
       g.title.toLowerCase().includes(needle) ||
       g.tags.some((t: string) => t.toLowerCase().includes(needle))
     )
-  }, [q, selectedCategory])
+  }, [q, selectedCategory, catalog])
 
   const trending = useMemo(() => [...filtered].sort(byTrending).slice(0, 6), [filtered])
   const newRising = useMemo(() => [...filtered].sort(byNewAndRising).slice(0, 6), [filtered])
@@ -45,9 +51,9 @@ export default function DiscoverPage() {
   // Build category list from all games (not filtered by search), sorted by count desc
   const categories = useMemo(() => {
     const counts: Record<string, number> = {}
-    GAMES.forEach((g: Game) => g.tags.forEach((t: string) => { const k=t.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,""); counts[k] = (counts[k] ?? 0) + 1 }))
+    catalog.forEach((g: Game) => g.tags.forEach((t: string) => { const k=slugify(t); counts[k] = (counts[k] ?? 0) + 1 }))
     return Object.keys(counts).sort((a,b)=>counts[b]-counts[a])
-  }, [])
+  }, [catalog])
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -73,28 +79,55 @@ export default function DiscoverPage() {
         selected={selectedCategory}
         onSelect={(slug: string | null) => {
           const params = new URLSearchParams(searchParams.toString())
-          if (!slug) params.delete("category"); else params.set("category", slug)
+          if (!slug) {
+            params.delete("category");
+            params.delete("sort");
+          } else {
+            params.set("category", slug)
+            if (!params.get("sort")) params.set("sort", "trending")
+          }
           const qs = params.toString()
           router.push(qs ? `/?${qs}` : "/")
         }}
       />
 
-  <Section title="Trending now" items={trending} seeAllHref="/trending" />
-  <Section title="New & Rising" items={newRising} />
-
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-medium">Editor’s Picks</h2>
-          <Link className="text-sm underline" href="/editors-picks">See all</Link>
-        </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {editors.map(g => (
-            <GameCard key={g.id} game={g} />
-          ))}
-        </div>
-      </section>
-
-  {/* Bottom categories removed per requirements */}
+      {selectedCategory ? (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-medium capitalize">{selectedCategory.replace(/-/g, " ")}</h2>
+            <SortSelect
+              value={sort}
+              onChange={(v) => {
+                const params = new URLSearchParams(searchParams.toString())
+                params.set("sort", v)
+                if (!params.get("category")) params.set("category", selectedCategory)
+                router.push(`/?${params.toString()}`)
+              }}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {applySort(filtered, sort).map((g) => (
+              <GameCard key={(g as any).slug ?? (g as any).id ?? g.title} game={g as any} />
+            ))}
+          </div>
+        </section>
+      ) : (
+        <>
+          <Section title="Trending now" items={trending} seeAllHref="/trending" />
+          <Section title="New & Rising" items={newRising} />
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-medium">Editor’s Picks</h2>
+              <Link className="text-sm underline" href="/editors-picks">See all</Link>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {editors.map(g => (
+                <GameCard key={(g as any).slug ?? g.id} game={g as any} />
+              ))}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   )
 }
@@ -127,7 +160,18 @@ function GameCard({ game }: { game: Game }) {
             <span key={t} className="rounded border px-1.5 py-0.5">{t}</span>
           ))}
         </div>
+        {(game as any).origin === "local" && (
+          <div className="mt-2 text-[10px] uppercase tracking-wide text-neutral-500">Your game</div>
+        )}
       </div>
     </Card>
   )
+}
+
+function applySort(items: Game[], sort: SortValue): Game[] {
+  if (sort === "trending") return [...items].sort(byTrending)
+  if (sort === "new") return [...items].sort((a,b)=> Date.parse(b.publishedAt) - Date.parse(a.publishedAt))
+  if (sort === "updated") return [...items].sort((a,b)=> Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+  if (sort === "editors") return items.filter((g)=> g.editorsPick)
+  return items
 }
