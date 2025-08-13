@@ -22,10 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </Link>
             <nav className="ml-auto flex items-center gap-4">
               <Link href="/" className="text-sm">Discover</Link>
-              <Link href="/browse" className="text-sm">Browse</Link>
               <Link href="/create" className="text-sm">Create</Link>
-              <Link href="/admin" className="text-sm">Admin</Link>
-              <Link href="/auth" className="text-sm">Sign in</Link>
             </nav>
           </div>
         </header>

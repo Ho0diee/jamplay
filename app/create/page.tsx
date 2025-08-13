@@ -1,5 +1,3 @@
-import { supabaseServer } from "@/lib/supabase-server";
-import { redirect } from "next/navigation";
 import CreateForm from "./CreateForm";
 
 const starter = {
@@ -11,7 +9,5 @@ const starter = {
 }
 
 export default async function CreatePage() {
-  const { data: { user } } = await supabaseServer().auth.getUser();
-  if (!user) redirect("/auth");
   return <CreateForm />;
 }
