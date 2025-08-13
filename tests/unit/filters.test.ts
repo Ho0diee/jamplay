@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest"
-import { filterByCategory, normalizeTagSlug } from "@/lib/filters"
+import { filterByCategory, normalizeTagSlug, dedupeBySlug } from "@/lib/filters"
 
 describe("filters", () => {
   const items = [
-    { id: 1, tags: ["Puzzle", "Story Telling"] },
-    { id: 2, tags: ["strategy", "logic"] },
-    { id: 3, tags: ["music"] },
+    { id: 1, slug: "a", tags: ["Puzzle", "Story Telling"] },
+    { id: 2, slug: "b", tags: ["strategy", "logic"] },
+    { id: 3, slug: "c", tags: ["music"] },
   ]
 
   it("returns originals when category is null/undefined", () => {
@@ -22,5 +22,17 @@ describe("filters", () => {
     const out = filterByCategory(items, "  story-telling  ")
     expect(out.map(i=>i.id)).toEqual([1])
     expect(normalizeTagSlug("Story Telling")).toBe("story-telling")
+  })
+
+  it("dedupeBySlug removes duplicates, keeps first occurrence (case-insensitive)", () => {
+    const dupes = [
+      { slug: "Alpha", tags: [] },
+      { slug: "beta", tags: [] },
+      { slug: "alpha", tags: ["later"] },
+    ]
+    const out = dedupeBySlug(dupes)
+    expect(out.length).toBe(2)
+    // First 'Alpha' remains
+    expect(out.find(i => i.slug.toLowerCase() === "alpha")).toEqual({ slug: "Alpha", tags: [] })
   })
 })

@@ -29,10 +29,14 @@ export function useCreateDraft() {
     setDraft((d: CreateDraft) => ({ ...d, ...patch }))
   }, [])
 
+  const setFromObject = React.useCallback((obj: Partial<CreateDraft>) => {
+    setDraft(() => ({ ...(obj as CreateDraft) }))
+  }, [])
+
   const reset = React.useCallback(() => {
     setDraft({ visibility: "draft" } as CreateDraft)
     try { localStorage.removeItem(STORAGE_KEY) } catch {}
   }, [])
 
-  return { draft, update, reset }
+  return { draft, update, setFromObject, reset }
 }

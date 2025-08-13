@@ -7,3 +7,12 @@ export function filterByCategory<T extends { tags?: string[] }>(items: T[], cate
   const cat = normalizeTagSlug(category)
   return items.filter((i) => (i.tags ?? []).some((t) => normalizeTagSlug(t) === cat))
 }
+
+export function dedupeBySlug<T extends { slug: string }>(items: T[]): T[] {
+  const map = new Map<string, T>()
+  for (const item of items) {
+    const s = item.slug.toLowerCase()
+    if (!map.has(s)) map.set(s, item)
+  }
+  return Array.from(map.values())
+}

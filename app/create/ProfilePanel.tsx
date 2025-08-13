@@ -1,6 +1,7 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -47,6 +48,7 @@ function readDraft(): any | null {
 export default function ProfilePanel() {
   const [games, setGames] = React.useState<LocalGame[]>([]);
   const [draft, setDraft] = React.useState<any | null>(null);
+  const router = useRouter();
 
   React.useEffect(() => {
     setGames(readMyGames());
@@ -55,6 +57,23 @@ export default function ProfilePanel() {
 
   const publishedCount = games.length;
   const draftsCount = draft ? 1 : 0;
+
+  const refresh = React.useCallback(() => {
+    setGames(readMyGames());
+    setDraft(readDraft());
+  }, []);
+
+  const onDelete = (slug: string) => {
+    if (typeof window === "undefined") return;
+    if (!confirm("Delete this game? This cannot be undone.")) return;
+    try {
+      const raw = localStorage.getItem("myGames");
+      const arr = raw ? (JSON.parse(raw) as any[]) : [];
+      const next = (Array.isArray(arr) ? arr : []).filter((g) => (g?.slug || "").toLowerCase() !== slug.toLowerCase());
+      localStorage.setItem("myGames", JSON.stringify(next));
+      refresh();
+    } catch {}
+  };
 
   return (
     <div className="space-y-4">
@@ -85,11 +104,17 @@ export default function ProfilePanel() {
             {games.map((g) => {
               const slug = (g.slug || g.title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
               return (
-                <li key={`${slug}`} className="flex items-center justify-between">
-                  <Link href={`/game/${slug}`} className="text-sm hover:underline">
-                    {g.title || slug}
-                  </Link>
-                  <Badge variant="outline">local</Badge>
+                <li key={`${slug}`} className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <Link href={`/game/${slug}`} className="text-sm hover:underline truncate">
+                      {g.title || slug}
+                    </Link>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">local</Badge>
+                    <button className="text-xs underline" onClick={() => router.push(`/create?edit=${slug}`)}>Edit</button>
+                    <button className="text-xs text-red-600 underline" onClick={() => onDelete(slug)}>Delete</button>
+                  </div>
                 </li>
               );
             })}

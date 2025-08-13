@@ -1,7 +1,7 @@
 "use client"
 import { Button } from "@/components/ui/button"
 
-export function CategoryPills({ categories, selected, onSelect }: { categories: string[]; selected?: string; onSelect: (slug: string|null)=>void }) {
+export function CategoryPills({ categories, selected, onSelect }: { categories: string[]; selected?: string | null; onSelect: (slug: string|null)=>void }) {
   const sel = (selected ?? "").toLowerCase()
   return (
     <div className="-mx-2 flex gap-2 overflow-x-auto pb-2">

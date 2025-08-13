@@ -10,13 +10,15 @@ import StepSafety from "./_components/StepSafety"
 import StepReview from "./_components/StepReview"
 import { useCreateDraft } from "@/lib/useCreateDraft"
 import { BasicsSchema, MediaSchema, GameplaySchema, BuildSchema, CommunitySchema, SafetySchema } from "@/lib/create-schema"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import ProfilePanel from "./ProfilePanel"
 
 export default function CreatePage() {
-  const { draft, update, reset } = useCreateDraft()
-  const [step, setStep] = React.useState(0) // 0..6
+  const { draft, update, setFromObject, reset } = useCreateDraft()
+  const [step, _setStep] = React.useState(0) // 0..6
+  const [attempted, setAttempted] = React.useState<Set<number>>(() => new Set())
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   const basicsResult = React.useMemo(() => BasicsSchema.safeParse(draft), [draft])
   const mediaResult = React.useMemo(() => MediaSchema.safeParse(draft), [draft])
@@ -35,6 +37,61 @@ export default function CreatePage() {
     : true
   )
 
+  // Intercept setStep to block forward nav and mark attempted for error display
+  const setStep = (target: number) => {
+    const next = Math.max(0, Math.min(6, target))
+    if (next > step) {
+      if (!canContinue) {
+        setAttempted((prev) => new Set(prev).add(step))
+        return
+      }
+    }
+    _setStep(next)
+  }
+
+  // Edit mode: /create?edit=slug
+  React.useEffect(() => {
+    const editSlug = searchParams.get("edit")
+    if (!editSlug) return
+    try {
+      const raw = localStorage.getItem("myGames")
+      if (!raw) return
+      const arr = JSON.parse(raw) as any[]
+      const item = (arr || []).find((g) => (g?.slug || "").toLowerCase() === editSlug.toLowerCase())
+      if (item) {
+        setFromObject({
+          title: item.title,
+          tagline: item.tagline,
+          category: item.category,
+          tags: item.tags,
+          slug: item.slug,
+          cover: item.cover,
+          gallery: item.gallery,
+          trailerUrl: item.trailer,
+          // gameplay
+          description: item.description,
+          howToPlay: item.howToPlay,
+          controls: item.controls,
+          sessionLength: item.sessionLength,
+          players: item.players,
+          contentWarnings: item.contentWarnings,
+          // build
+          launchType: item.launchType,
+          playUrlOrTemplateId: item.playUrlOrTemplateId,
+          version: String(item.version ?? "1"),
+          changelog: item.changelog,
+          // community & safety retained if present
+          creatorName: item.creatorName,
+          links: item.links,
+          supportUrl: item.supportUrl,
+          rightsConfirmed: item.rightsConfirmed,
+          policyConfirmed: item.policyConfirmed,
+          ageGuidance: item.ageGuidance,
+        } as any)
+      }
+    } catch {}
+  }, [searchParams, setFromObject])
+
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -45,46 +102,46 @@ export default function CreatePage() {
             canContinue={canContinue}
             onReset={reset}
           >
-            {step === 0 && (
+      {step === 0 && (
               <StepBasics
                 value={draft}
                 onChange={update}
-                errors={!basicsResult.success ? basicsResult.error.flatten() : undefined}
+        errors={!basicsResult.success && attempted.has(0) ? basicsResult.error.flatten() : undefined}
               />
             )}
             {step === 1 && (
               <StepMedia
                 value={draft}
                 onChange={update}
-                errors={!mediaResult.success ? mediaResult.error.flatten() : undefined}
+        errors={!mediaResult.success && attempted.has(1) ? mediaResult.error.flatten() : undefined}
               />
             )}
             {step === 2 && (
               <StepGameplay
                 value={draft}
                 onChange={update}
-                errors={!gameplayResult.success ? gameplayResult.error.flatten() : undefined}
+        errors={!gameplayResult.success && attempted.has(2) ? gameplayResult.error.flatten() : undefined}
               />
             )}
             {step === 3 && (
               <StepBuild
                 value={draft}
                 onChange={update}
-                errors={!buildResult.success ? buildResult.error.flatten() : undefined}
+        errors={!buildResult.success && attempted.has(3) ? buildResult.error.flatten() : undefined}
               />
             )}
             {step === 4 && (
               <StepCommunity
                 value={draft}
                 onChange={update}
-                errors={!communityResult.success ? communityResult.error.flatten() : undefined}
+        errors={!communityResult.success && attempted.has(4) ? communityResult.error.flatten() : undefined}
               />
             )}
             {step === 5 && (
               <StepSafety
                 value={draft}
                 onChange={update}
-                errors={!safetyResult.success ? safetyResult.error.flatten() : undefined}
+        errors={!safetyResult.success && attempted.has(5) ? safetyResult.error.flatten() : undefined}
               />
             )}
             {step === 6 && (
