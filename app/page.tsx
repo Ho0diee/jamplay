@@ -2,11 +2,14 @@
 
 import { useMemo, useState, type ChangeEvent } from "react"
 import Link from "next/link"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { trendingScore } from "@/lib/rankers"
 import { games as GAMES, type Game } from "@/lib/demo-data"
+import { filterByCategory } from "@/lib/filters"
+import { CategoryPills } from "@/components/CategoryPills"
 
 function byTrending(a: Game, b: Game) {
   return trendingScore(b) - trendingScore(a)
@@ -21,24 +24,30 @@ function byNewAndRising(a: Game, b: Game) {
 
 export default function DiscoverPage() {
   const [q, setQ] = useState<string>("")
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const selectedCategory = (searchParams.get("category") || undefined) as string | undefined
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    if (!needle) return GAMES
-    return GAMES.filter((g: Game) =>
+    const byCategory = filterByCategory(GAMES, selectedCategory)
+    if (!needle) return byCategory
+    return byCategory.filter((g: Game) =>
       g.title.toLowerCase().includes(needle) ||
       g.tags.some((t: string) => t.toLowerCase().includes(needle))
     )
-  }, [q])
+  }, [q, selectedCategory])
 
   const trending = useMemo(() => [...filtered].sort(byTrending).slice(0, 6), [filtered])
   const newRising = useMemo(() => [...filtered].sort(byNewAndRising).slice(0, 6), [filtered])
   const editors = useMemo(() => filtered.filter((g: Game) => g.editorsPick).slice(0, 6), [filtered])
+
+  // Build category list from all games (not filtered by search), sorted by count desc
   const categories = useMemo(() => {
     const counts: Record<string, number> = {}
-    filtered.forEach((g: Game) => g.tags.forEach((t: string) => { counts[t] = (counts[t] ?? 0) + 1 }))
-    return Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0, 8)
-  }, [filtered])
+    GAMES.forEach((g: Game) => g.tags.forEach((t: string) => { const k=t.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,""); counts[k] = (counts[k] ?? 0) + 1 }))
+    return Object.keys(counts).sort((a,b)=>counts[b]-counts[a])
+  }, [])
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -58,6 +67,18 @@ export default function DiscoverPage() {
         </div>
       </section>
 
+      {/* Categories pills */}
+      <CategoryPills
+        categories={categories}
+        selected={selectedCategory}
+        onSelect={(slug: string | null) => {
+          const params = new URLSearchParams(searchParams.toString())
+          if (!slug) params.delete("category"); else params.set("category", slug)
+          const qs = params.toString()
+          router.push(qs ? `/?${qs}` : "/")
+        }}
+      />
+
   <Section title="Trending now" items={trending} seeAllHref="/trending" />
   <Section title="New & Rising" items={newRising} />
 
@@ -73,18 +94,7 @@ export default function DiscoverPage() {
         </div>
       </section>
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-medium">Categories</h2>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {categories.map(([tag, count]) => (
-            <Button key={tag} variant="outline" size="sm" className="rounded-full">
-              {tag} <span className="ml-2 text-neutral-500">{count}</span>
-            </Button>
-          ))}
-        </div>
-      </section>
+  {/* Bottom categories removed per requirements */}
     </div>
   )
 }
