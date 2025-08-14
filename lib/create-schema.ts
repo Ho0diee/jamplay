@@ -1,23 +1,24 @@
 import { z, type RefinementCtx } from "zod"
 import { slugify, validateSlugFormat, normalizeTags } from "@/lib/slug"
+import { isYouTubeUrl } from "@/lib/youtube"
 import { games as DEMO } from "@/lib/demo-data"
 
 export const visibilityEnum = z.enum(["draft", "unlisted", "public"]) 
 
 const BasicsCore = z.object({
   title: z.string().trim().min(4, "Min 4 characters").max(80, "Max 80 characters"),
-  tagline: z
-    .union([z.string().max(120, "Max 120 characters"), z.literal("")])
-    .optional()
-    .transform((v: string | undefined): string | undefined => (v === "" ? undefined : v)),
+  // tagline removed
   category: z.string().min(1, "Category is required"),
-  tags: z.array(z.string()).max(10).optional().transform((arr: string[] | undefined) => normalizeTags(arr ?? [])),
+  tags: z.array(z.string()).max(10).optional()
+    .transform((arr: string[] | undefined) => normalizeTags(arr ?? []))
+    .refine((arr: string[]) => (arr ?? []).every((t: string) => t.length <= 20), { message: "Each tag ≤ 20 chars", path: ["tags"] }),
+  // slug is auto, readonly preview; still validate shape locally for safety
   slug: z.string().transform((s: string) => slugify(s)).superRefine((val: string, ctx: RefinementCtx) => {
     const fmt = validateSlugFormat(val)
     if (!fmt.ok) ctx.addIssue({ code: z.ZodIssueCode.custom, message: fmt.error, path: ["slug"] })
     if (val.length < 3) ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Min 3 characters", path: ["slug"] })
   }),
-  // moved visibility to Review step
+  // visibility moved to Review & Publish
 })
 
 export type BasicsCoreType = z.infer<typeof BasicsCore>
@@ -44,18 +45,9 @@ export function makeBasicsSchema(existingTitles: Set<string>, existingSlugs: Set
   })
 }
 
-export function isYouTubeUrl(u: string): boolean {
-  try {
-    const url = new URL(u)
-    if (url.hostname.includes("youtube.com")) return url.searchParams.has("v")
-    if (url.hostname === "youtu.be") return !!url.pathname.slice(1)
-    return false
-  } catch { return false }
-}
-
 export const MediaSchema = z.object({
   cover: z.string().min(1, { message: "Cover is required" }),
-  thumb: z.string().min(1, { message: "Square thumbnail is required" }).optional(),
+  thumb: z.string().min(1, { message: "Square thumbnail is required" }),
   gallery: z.array(z.string()).max(5).optional(),
   trailerUrl: z
     .union([z.string(), z.literal("")])
@@ -64,13 +56,38 @@ export const MediaSchema = z.object({
   .refine((v: string | undefined) => v === undefined || isYouTubeUrl(v), { message: "Enter a valid YouTube URL" }),
 })
 
-export const CreateDraftSchema = BasicsCore.merge(MediaSchema.partial())
+export const CreateDraftSchema = BasicsCore
+  .merge(MediaSchema.partial())
+  .merge(z.object({
+    description: z.string().optional(),
+    controls: z.string().optional(),
+    sessionLength: z.string().optional(),
+  }))
+  .merge(z.object({
+    launchType: z.enum(["external", "embedded_template", "api_endpoint"]).optional(),
+    playUrlOrTemplateId: z.string().optional(),
+    version: z.string().optional(),
+    changelog: z.string().optional(),
+  }))
+  .merge(z.object({
+    links: z.object({
+      site: z.string().url().optional(),
+      discord: z.string().url().optional(),
+      x: z.string().url().optional(),
+    }).optional(),
+  }))
+  .merge(z.object({
+    rightsConfirmed: z.boolean().optional(),
+    policyConfirmed: z.boolean().optional(),
+    ageGuidance: z.enum(["everyone", "teen", "mature"]).optional(),
+    visibility: visibilityEnum.optional(),
+  }))
 export type CreateDraft = z.infer<typeof CreateDraftSchema>
 
 // Step 3: Gameplay
 export const GameplaySchema = z.object({
-  description: z.string().min(80, "Min 80 characters").max(2000, "Max ~2000 characters"),
-  howToPlay: z.string().optional(),
+  description: z.string().trim().min(30, "Min 30 characters").max(2000, "Max ~2000 characters"),
+  // Presets + optional custom lines handled in UI; store as string for now
   controls: z.string().optional(),
   sessionLength: z.string().min(1, "Session length is required").transform((v: string, ctx: RefinementCtx) => {
     const s = v.trim()
@@ -86,9 +103,24 @@ export const GameplaySchema = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Use minutes (1–300) or m-n range", path: ["sessionLength"] })
     return z.NEVER
   }),
-  players: z.enum(["solo", "co-op", "multiplayer"]),
-  contentWarnings: z.array(z.string()).max(20).optional(),
 })
+
+export function parseSessionLength(input: string): { type: "single"; minutes: number } | { type: "range"; min: number; max: number } | null {
+  const s = (input ?? "").trim();
+  if (!s) return null;
+  if (/^\d+$/.test(s)) {
+    const m = parseInt(s, 10);
+    if (m >= 1 && m <= 300) return { type: "single", minutes: m } as const;
+    return null;
+  }
+  const m = s.match(/^(\d+)-(\d+)$/);
+  if (m) {
+    const min = parseInt(m[1], 10);
+    const max = parseInt(m[2], 10);
+    if (min >= 1 && max <= 300 && min < max) return { type: "range", min, max } as const;
+  }
+  return null;
+}
 
 // Step 4: Build & Access
 export const BuildSchema = z.object({
@@ -106,13 +138,12 @@ export const BuildSchema = z.object({
 
 // Step 5: Community
 export const CommunitySchema = z.object({
-  creatorName: z.string().optional(),
+  // creator/monetization hidden for now; allow optional links if present in UI
   links: z.object({
     site: z.string().url().optional(),
     discord: z.string().url().optional(),
     x: z.string().url().optional(),
   }).optional(),
-  supportUrl: z.string().url().optional(),
 })
 
 // Step 6: Safety & Rights

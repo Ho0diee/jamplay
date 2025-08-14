@@ -1,11 +1,10 @@
-export function slugify(input: string, opts?: { max?: number }) {
-  const max = opts?.max ?? 60
+export function slugify(input: string, maxLen: number = 60) {
   return input
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "")
-    .slice(0, Math.max(0, max))
+  .slice(0, Math.max(0, maxLen))
 }
 
 export function validateSlugFormat(slug: string): { ok: true } | { ok: false; error: string } {
@@ -23,7 +22,7 @@ export function normalizeTags(tags: string[]): string[] {
   const out: string[] = []
   const seen = new Set<string>()
   for (const t of tags) {
-    const n = slugify(t)
+  const n = slugify(t, 20)
     if (n && !seen.has(n)) { seen.add(n); out.push(n) }
   }
   return out

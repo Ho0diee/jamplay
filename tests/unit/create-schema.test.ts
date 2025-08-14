@@ -1,15 +1,13 @@
 import { describe, it, expect } from "vitest"
-import { BasicsSchema, MediaSchema } from "@/lib/create-schema"
+import { BasicsSchema, MediaSchema, GameplaySchema, BuildSchema } from "@/lib/create-schema"
 
 describe("BasicsSchema", () => {
   it("accepts a valid title and slug", () => {
     const res = BasicsSchema.safeParse({
       title: "My Game",
-      tagline: "Fun game",
       category: "RPG",
       tags: ["rpg"],
       slug: "my-game",
-      visibility: "draft",
     })
     expect(res.success).toBe(true)
   })
@@ -19,7 +17,6 @@ describe("BasicsSchema", () => {
       title: "",
       category: "",
       slug: "Bad Slug!",
-      visibility: "draft",
     })
     expect(res.success).toBe(false)
   })
@@ -28,7 +25,6 @@ describe("BasicsSchema", () => {
     const res = BasicsSchema.safeParse({
       title: "X",
       slug: "x",
-      visibility: "draft",
     })
     expect(res.success).toBe(false)
   })
@@ -40,8 +36,28 @@ describe("MediaSchema", () => {
     expect(res.success).toBe(false)
   })
 
-  it("accepts a valid cover", () => {
-    const res = MediaSchema.safeParse({ cover: "https://example.com/x.jpg" })
+  it("accepts a valid cover + thumb", () => {
+    const res = MediaSchema.safeParse({ cover: "data:image/jpeg;base64,abc", thumb: "data:image/jpeg;base64,xyz" })
     expect(res.success).toBe(true)
+  })
+})
+
+describe("GameplaySchema", () => {
+  it("requires description >= 30 and parses session length", () => {
+    expect(GameplaySchema.safeParse({ description: "short", sessionLength: "10" }).success).toBe(false)
+    const ok1 = GameplaySchema.safeParse({ description: "x".repeat(30), sessionLength: "10" })
+    expect(ok1.success).toBe(true)
+    const ok2 = GameplaySchema.safeParse({ description: "x".repeat(30), sessionLength: "5-20" })
+    expect(ok2.success).toBe(true)
+    const bad = GameplaySchema.safeParse({ description: "x".repeat(30), sessionLength: "400" })
+    expect(bad.success).toBe(false)
+  })
+})
+
+describe("BuildSchema", () => {
+  it("requires play target appropriate to launch type", () => {
+    expect(BuildSchema.safeParse({ launchType: "external", playUrlOrTemplateId: "https://x" }).success).toBe(true)
+    expect(BuildSchema.safeParse({ launchType: "external", playUrlOrTemplateId: "notaurl" }).success).toBe(false)
+    expect(BuildSchema.safeParse({ launchType: "embedded_template", playUrlOrTemplateId: "TMP-ABCDE" }).success).toBe(true)
   })
 })
