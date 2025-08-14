@@ -42,7 +42,11 @@ export default function CreatePage() {
     const next = Math.max(0, Math.min(6, target))
     if (next > step) {
       if (!canContinue) {
-        setAttempted((prev) => new Set(prev).add(step))
+        setAttempted((prev: Set<number>) => {
+          const s = new Set(prev)
+          s.add(step)
+          return s
+        })
         return
       }
     }

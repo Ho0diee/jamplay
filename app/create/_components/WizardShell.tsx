@@ -81,7 +81,6 @@ export default function WizardShell({
             <Button
               size="md"
               onClick={() => setStep(Math.min(6, step + 1))}
-              disabled={!canContinue}
             >
               Continue
             </Button>
