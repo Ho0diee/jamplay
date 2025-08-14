@@ -3,7 +3,8 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import WizardShell from "./_components/WizardShell";
 import StepBasics from "./_components/StepBasics";
-import StepMedia from "./_components/StepMedia";
+// We'll inline Media UI logic here to support files-only gallery and cover-only crop
+// Keep other steps as components
 import StepGameplay from "./_components/StepGameplay";
 import StepBuild from "./_components/StepBuild";
 import StepCommunity from "./_components/StepCommunity";
@@ -12,6 +13,12 @@ import StepReview from "./_components/StepReview";
 import { BasicsSchema, MediaSchema, GameplaySchema, BuildSchema, SafetySchema, type CreateDraft } from "@/lib/create-schema";
 import { slugify } from "@/lib/slug";
 import { createGameAction } from "./actions";
+import { BANNED_TITLE, BANNED_TAGS, checkBanned } from "@/lib/banlist";
+import { CATEGORY_SUGGESTIONS, normalizeTag, dedupeTags } from "@/lib/tags";
+import ImageCropper from "./_components/ImageCropper";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function CreateForm() {
   const router = useRouter();
@@ -24,7 +31,6 @@ export default function CreateForm() {
     category: "",
     tags: [],
     cover: undefined,
-    thumb: undefined,
     gallery: [],
     trailerUrl: "",
     description: "",
@@ -41,8 +47,13 @@ export default function CreateForm() {
     visibility: "draft",
     slug: "",
   } as any);
+  // Media step local state for files-only workflow
+  const [coverFile, setCoverFile] = React.useState<File | null>(null);
+  const [galleryQueue, setGalleryQueue] = React.useState<File[]>([]);
+  const [galleryWorking, setGalleryWorking] = React.useState<File | null>(null);
+  const [pendingGallery, setPendingGallery] = React.useState<string | null>(null);
 
-  const patch = (p: Partial<CreateDraft>) => setDraft((d) => ({ ...d, ...p }));
+  const patch = (p: Partial<CreateDraft>) => setDraft((d: CreateDraft) => ({ ...d, ...p }));
 
   // Edit mode from local storage
   React.useEffect(() => {
@@ -78,7 +89,7 @@ export default function CreateForm() {
         ageGuidance: item.ageGuidance || undefined,
         visibility: item.visibility || "draft",
       } as any;
-      setDraft((d) => ({ ...d, ...next }));
+  setDraft((d: CreateDraft) => ({ ...d, ...next }));
       originalSlugRef.current = item.slug || null;
     } catch {}
   }, [searchParams]);
@@ -93,10 +104,9 @@ export default function CreateForm() {
 
   const mediaRes = React.useMemo(() => MediaSchema.safeParse({
     cover: draft.cover,
-    thumb: draft.thumb,
     gallery: draft.gallery,
     trailerUrl: draft.trailerUrl || undefined,
-  }), [draft.cover, draft.thumb, draft.gallery, draft.trailerUrl]);
+  }), [draft.cover, draft.gallery, draft.trailerUrl]);
 
   const gameplayRes = React.useMemo(() => GameplaySchema.safeParse({
     description: draft.description,
@@ -122,16 +132,16 @@ export default function CreateForm() {
     : step === 5 ? safetyRes.success
     : true;
 
-  const onTryContinue = () => setAttempted((prev) => new Set(prev).add(step));
+  const onTryContinue = () => setAttempted((prev: Set<number>) => new Set(prev).add(step));
 
   async function onPublish() {
     // validate required steps
     const req = [basicsRes, mediaRes, gameplayRes, buildRes, safetyRes];
     for (let i = 0; i < req.length; i++) {
-      if (!req[i].success) { setAttempted((p) => new Set(p).add(i)); setStep(i); return; }
+  if (!req[i].success) { setAttempted((p: Set<number>) => new Set(p).add(i)); setStep(i); return; }
     }
     const res = await createGameAction({ title: (draft.title || "").trim(), description: (draft.description || "").trim() });
-    if (!res.ok) { setAttempted((p) => new Set(p).add(6)); return; }
+  if (!res.ok) { setAttempted((p: Set<number>) => new Set(p).add(6)); return; }
     const slug = res.slug;
     const nowIso = new Date().toISOString();
     const game: any = {
@@ -181,13 +191,128 @@ export default function CreateForm() {
   const buildErrors = !attempted.has(3) || buildRes.success ? undefined : buildRes.error.flatten();
   const safetyErrors = !attempted.has(5) || safetyRes.success ? undefined : safetyRes.error.flatten();
 
+  const bannedTitle = checkBanned(draft.title || "", BANNED_TITLE);
+  const bannedTags = (draft.tags ?? []).some((t: string) => !checkBanned(t, BANNED_TAGS).ok);
+  const finalCanContinue = canContinue && !(step === 0 && (bannedTags || !bannedTitle.ok));
+
   return (
-    <WizardShell step={step} setStep={setStep} canContinue={canContinue} onTryContinue={onTryContinue}>
+    <WizardShell step={step} setStep={setStep} canContinue={finalCanContinue} onTryContinue={onTryContinue}>
       {step === 0 && (
-        <StepBasics value={draft} onChange={patch} errors={basicsErrors as any} />
+        <>
+        {(step===0 && (!bannedTitle.ok || bannedTags)) && (
+          <div className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800">Please fix mistakes: banned words detected.</div>
+        )}
+        <StepBasics value={draft} onChange={(p)=>{
+          // immediate banned check for title and tags
+          if (p.title !== undefined) {
+            const { ok } = checkBanned(p.title, BANNED_TITLE)
+            // store anyway; Continue button disabled via canContinue + additional gate below
+          }
+          if (p.tags) {
+            const cleaned = dedupeTags(p.tags)
+            patch({ ...p, tags: cleaned })
+          } else {
+            patch(p)
+          }
+        }} errors={basicsErrors as any} />
+        {!!draft.category && CATEGORY_SUGGESTIONS[draft.category] && (
+          <div className="-mt-4">
+            <Card>
+              <CardTitle className="px-4 pt-3 text-base">Suggested tags</CardTitle>
+              <CardDescription className="px-4">Toggle to add or remove</CardDescription>
+              <div className="flex flex-wrap gap-2 p-4">
+                {CATEGORY_SUGGESTIONS[draft.category].map((t) => {
+                  const slug = normalizeTag(t)
+                  const active = (draft.tags ?? []).includes(slug)
+                  return (
+                    <button
+                      key={slug}
+                      className={"rounded-full border px-2 py-1 text-xs " + (active ? "bg-black text-white" : "hover:bg-neutral-50")}
+                      onClick={() => {
+                        const next = active ? (draft.tags ?? []).filter(x => x !== slug) : dedupeTags([...(draft.tags ?? []), slug])
+                        patch({ tags: next })
+                      }}
+                      type="button"
+                    >
+                      {slug}
+                    </button>
+                  )
+                })}
+              </div>
+            </Card>
+          </div>
+        )}
+        </>
       )}
       {step === 1 && (
-        <StepMedia value={draft as any} onChange={patch as any} errors={mediaErrors as any} />
+        <div className="space-y-6">
+          {mediaErrors && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">Please fix the highlighted errors.</div>
+          )}
+          <Card>
+            <CardTitle>Cover image</CardTitle>
+            <CardDescription>16:9 crop at 1280×720. Preview is scaled down.</CardDescription>
+            <div className="mt-3 space-y-3">
+              <Input type="file" accept="image/*" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const f = e.target.files?.[0] ?? null
+                patch({})
+                setCoverFile(f)
+              }} />
+              {coverFile && (
+                <ImageCropper file={coverFile} preset={{ width: 1280, height: 720 }} previewWidth={480} onChange={(d)=>patch({ cover: d || undefined })} />
+              )}
+              {!coverFile && draft.cover && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={draft.cover} alt="Cover preview" className="h-auto w-[480px] rounded border object-cover" />
+              )}
+            </div>
+          </Card>
+
+          <Card>
+            <CardTitle>Gallery (up to 5)</CardTitle>
+            <CardDescription>Each image must be cropped to 16:9 before adding.</CardDescription>
+            <div className="mt-3 space-y-3">
+              <Input type="file" accept="image/*" multiple onChange={(e: React.ChangeEvent<HTMLInputElement>)=>{
+                const files = Array.from(e.target.files ?? [])
+                if (!files.length) return
+                // Take one at a time to crop
+                setGalleryQueue(files)
+                setGalleryWorking(files[0] || null)
+              }} />
+              {galleryWorking && (
+                <div>
+                  <ImageCropper file={galleryWorking} preset={{ width: 1280, height: 720 }} previewWidth={360} onChange={(data)=>setPendingGallery(data)} />
+                  <div className="mt-2 flex gap-2">
+                    <Button size="sm" onClick={()=>{
+                      if (pendingGallery) patch({ gallery: [...(draft.gallery ?? []), pendingGallery].slice(0,5) })
+                      const rest = galleryQueue.slice(1)
+                      setGalleryQueue(rest)
+                      setGalleryWorking(rest[0] || null)
+                      setPendingGallery(null)
+                    }}>Add to gallery</Button>
+                    <Button size="sm" variant="outline" onClick={()=>{
+                      const rest = galleryQueue.slice(1)
+                      setGalleryQueue(rest)
+                      setGalleryWorking(rest[0] || null)
+                      setPendingGallery(null)
+                    }}>Skip</Button>
+                  </div>
+                </div>
+              )}
+              {!!(draft.gallery?.length) && (
+                <div className="grid grid-cols-3 gap-2">
+                  {draft.gallery!.map((g, i) => (
+                    <div key={i} className="relative">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={g} className="aspect-video w-full rounded border object-cover" />
+                      <button className="absolute right-1 top-1 rounded bg-white/80 px-1 text-xs" onClick={()=>patch({ gallery: draft.gallery!.filter((_, idx)=>idx!==i) })}>×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
       )}
       {step === 2 && (
         <StepGameplay value={draft} onChange={patch} errors={gameplayErrors as any} />

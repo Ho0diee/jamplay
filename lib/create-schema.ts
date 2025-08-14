@@ -1,5 +1,6 @@
 import { z, type RefinementCtx } from "zod"
-import { slugify, validateSlugFormat, normalizeTags } from "@/lib/slug"
+import { slugify, validateSlugFormat } from "@/lib/slug"
+import { dedupeTags, normalizeTag } from "@/lib/tags"
 import { isYouTubeUrl } from "@/lib/youtube"
 import { games as DEMO } from "@/lib/demo-data"
 
@@ -10,7 +11,7 @@ const BasicsCore = z.object({
   // tagline removed
   category: z.string().min(1, "Category is required"),
   tags: z.array(z.string()).max(10).optional()
-    .transform((arr: string[] | undefined) => normalizeTags(arr ?? []))
+    .transform((arr: string[] | undefined) => dedupeTags(arr ?? []))
     .refine((arr: string[]) => (arr ?? []).every((t: string) => t.length <= 20), { message: "Each tag ≤ 20 chars", path: ["tags"] }),
   // slug is auto, readonly preview; still validate shape locally for safety
   slug: z.string().transform((s: string) => slugify(s)).superRefine((val: string, ctx: RefinementCtx) => {
@@ -47,13 +48,13 @@ export function makeBasicsSchema(existingTitles: Set<string>, existingSlugs: Set
 
 export const MediaSchema = z.object({
   cover: z.string().min(1, { message: "Cover is required" }),
-  thumb: z.string().min(1, { message: "Square thumbnail is required" }),
+  // gallery stores cropped data URLs (or blob URLs) only
   gallery: z.array(z.string()).max(5).optional(),
   trailerUrl: z
     .union([z.string(), z.literal("")])
     .optional()
     .transform((v: string | undefined): string | undefined => (v === "" ? undefined : v))
-  .refine((v: string | undefined) => v === undefined || isYouTubeUrl(v), { message: "Enter a valid YouTube URL" }),
+    .refine((v: string | undefined) => v === undefined || isYouTubeUrl(v), { message: "Enter a valid YouTube URL" }),
 })
 
 export const CreateDraftSchema = BasicsCore

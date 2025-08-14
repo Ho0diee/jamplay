@@ -7,10 +7,12 @@ export default function ImageCropper({
   file,
   preset,
   onChange,
+  previewWidth = 480,
 }: {
   file?: File | null
   preset: Preset
   onChange: (dataUrl: string | null) => void
+  previewWidth?: number
 }) {
   const [img, setImg] = React.useState<HTMLImageElement | null>(null)
   const [zoom, setZoom] = React.useState(1)
@@ -60,10 +62,19 @@ export default function ImageCropper({
   }
   const onMouseUp = () => { dragging.current = false }
 
+  const aspect = preset.width / preset.height
+  const previewHeight = Math.round(previewWidth / aspect)
+
   return (
     <div className="space-y-2">
-      <div className="relative inline-block border" onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp}>
-        <canvas ref={canvasRef} className="block" />
+      <div
+        className="relative inline-block overflow-hidden rounded border bg-neutral-50"
+        style={{ width: previewWidth, height: previewHeight }}
+        onMouseDown={onMouseDown}
+        onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp}
+      >
+        <canvas ref={canvasRef} className="block h-full w-full object-cover" />
       </div>
       <input
         type="range"

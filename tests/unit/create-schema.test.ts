@@ -36,8 +36,8 @@ describe("MediaSchema", () => {
     expect(res.success).toBe(false)
   })
 
-  it("accepts a valid cover + thumb", () => {
-    const res = MediaSchema.safeParse({ cover: "data:image/jpeg;base64,abc", thumb: "data:image/jpeg;base64,xyz" })
+  it("accepts a valid cover and optional gallery", () => {
+    const res = MediaSchema.safeParse({ cover: "data:image/jpeg;base64,abc", gallery: ["blob:xyz"] })
     expect(res.success).toBe(true)
   })
 })
