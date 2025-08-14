@@ -25,7 +25,7 @@ export default function StepReview({
   onSaveDraft: () => void
   onEditStep: (stepIndex: number) => void
 }) {
-  const slug = (value as any).slug as string | undefined
+  const title = (value as any).title as string | undefined
 
   return (
     <div className="space-y-6">
@@ -35,10 +35,8 @@ export default function StepReview({
         <div className="mt-4 grid gap-6 sm:grid-cols-2">
           <div className="space-y-3">
             <Row label="Title" value={(value as any).title} />
-            <Row label="Tagline" value={(value as any).tagline} />
             <Row label="Category" value={(value as any).category} />
             <Row label="Tags" value={(value as any).tags?.join(", ")} />
-            <Row label="Slug" value={(value as any).slug} />
             <Row label="Visibility" value={(value as any).visibility} />
             <hr className="my-2" />
             <Row label="Description" value={(value as any).description} />
@@ -77,13 +75,13 @@ export default function StepReview({
                 )}
               </div>
               <div className="mt-2 text-sm">
-                <div className="font-medium">{(value as any).title ?? slug ?? "Untitled"}</div>
-                <div className="text-neutral-600">{(value as any).tagline ?? "No tagline"}</div>
+                <div className="font-medium">{(value as any).title ?? "Untitled"}</div>
+                <div className="text-neutral-600">{(value as any).category ?? "No category"}</div>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <Button size="md" onClick={onPublish} disabled={!slug}>Publish</Button>
+              <Button size="md" onClick={onPublish} disabled={!title}>Publish</Button>
               <Button variant="outline" onClick={onSaveDraft}>Save Draft</Button>
             </div>
 

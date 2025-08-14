@@ -4,7 +4,7 @@ import { Card, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectItem } from "@/components/ui/select"
-import { normalizeTagSlug } from "@/lib/filters"
+import { slugify } from "@/lib/slug"
 import type { CreateDraft } from "@/lib/create-schema"
 
 const playerOpts = [
@@ -98,7 +98,7 @@ export default function StepGameplay({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && cwInput.trim()) {
                     e.preventDefault()
-                    const next = Array.from(new Set([...(value.contentWarnings ?? []), normalizeTagSlug(cwInput)]))
+                    const next = Array.from(new Set([...(value.contentWarnings ?? []), slugify(cwInput).slice(0,20)]))
                     onChange({ contentWarnings: next })
                     setCwInput("")
                   }

@@ -4,7 +4,7 @@ import { Card, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectItem } from "@/components/ui/select"
-import { normalizeTagSlug } from "@/lib/filters"
+import { slugify } from "@/lib/slug"
 import { BasicsSchema, type CreateDraft } from "@/lib/create-schema"
 
 type Draft = CreateDraft
@@ -56,24 +56,14 @@ export default function StepBasics({
             <label className="mb-1 block text-sm font-medium">Title</label>
             <Input
               value={value.title ?? ""}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                onChange({ title: e.target.value, slug: value.slug ? value.slug : normalizeTagSlug(e.target.value) })
-              }
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ title: e.target.value })}
               placeholder="e.g., Galactic Chef"
               maxLength={80}
             />
             {fieldError("title") && <p className="mt-1 text-xs text-red-600">{fieldError("title")}</p>}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">Tagline</label>
-            <Textarea
-              value={value.tagline ?? ""}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange({ tagline: e.target.value })}
-              placeholder="A one-line hook for your game"
-              maxLength={120}
-            />
-            {fieldError("tagline") && <p className="mt-1 text-xs text-red-600">{fieldError("tagline")}</p>}
+            {!!(value.title?.trim()) && (
+              <p className="mt-1 text-xs text-neutral-500">URL: /game/{slugify(value.title!)}</p>
+            )}
           </div>
 
           <div>
@@ -99,7 +89,7 @@ export default function StepBasics({
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && tagInput.trim()) {
                     e.preventDefault()
-                    const next = Array.from(new Set([...(value.tags ?? []), normalizeTagSlug(tagInput)]))
+                    const next = Array.from(new Set([...(value.tags ?? []), slugify(tagInput).slice(0, 20)]))
                     onChange({ tags: next })
                     setTagInput("")
                   }
@@ -123,16 +113,6 @@ export default function StepBasics({
                 ))}
               </div>
             )}
-          </div>
-
-          <div>
-            <label className="mb-1 block text-sm font-medium">Slug</label>
-            <Input
-              value={value.slug ?? ""}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ slug: normalizeTagSlug(e.target.value) })}
-              placeholder="galactic-chef"
-            />
-            {fieldError("slug") && <p className="mt-1 text-xs text-red-600">{fieldError("slug")}</p>}
           </div>
 
           <div>

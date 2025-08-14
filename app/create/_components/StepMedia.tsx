@@ -3,20 +3,16 @@ import * as React from "react"
 import { Card, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import ImageCropper from "./ImageCropper"
 import { MediaSchema } from "@/lib/create-schema"
+import { isYouTubeUrl } from "@/lib/youtube"
 
 export type Draft = {
   cover?: string | null
+  thumb?: string | null
   gallery?: string[]
   trailerUrl?: string | null
 }
-
-const placeholders = [
-  "/logo.svg",
-  "https://picsum.photos/seed/cover1/800/450",
-  "https://picsum.photos/seed/cover2/800/450",
-  "https://picsum.photos/seed/cover3/800/450",
-]
 
 export default function StepMedia({
   value,
@@ -36,11 +32,8 @@ export default function StepMedia({
     return list && list.length ? list[0] : undefined
   }
 
-  const handleFile = async (file: File) => {
-    // No real upload; create an object URL as a stand-in
-    const url = URL.createObjectURL(file)
-    onChange({ cover: url })
-  }
+  const [coverFile, setCoverFile] = React.useState<File | null>(null)
+  const [thumbFile, setThumbFile] = React.useState<File | null>(null)
 
   return (
     <div className="space-y-6">
@@ -49,21 +42,36 @@ export default function StepMedia({
           Please fix the highlighted errors.
         </div>
       )}
+
       <Card>
         <CardTitle>Cover image</CardTitle>
-        <CardDescription>Upload an image or pick a placeholder so you can keep going.</CardDescription>
+        <CardDescription>Crop to 1280×720 for best results.</CardDescription>
         <div className="mt-4 space-y-3">
-          <div className="flex items-center gap-3">
-            <Input type="file" accept="image/*" onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-              const f = e.target.files?.[0]
-              if (f) handleFile(f)
-            }} />
-            <Button type="button" variant="outline" onClick={() => onChange({ cover: placeholders[0] })}>Use placeholder</Button>
-          </div>
-          {value.cover && (
+          <Input type="file" accept="image/*" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCoverFile(e.target.files?.[0] ?? null)} />
+          {coverFile && (
+            <ImageCropper file={coverFile} preset={{ width: 1280, height: 720 }} onChange={(d) => onChange({ cover: d })} />
+          )}
+          {value.cover && !coverFile && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img src={value.cover} alt="Cover preview" className="h-40 w-full rounded object-cover" />
           )}
           {fieldError("cover") && <p className="text-xs text-red-600">{fieldError("cover")}</p>}
+        </div>
+      </Card>
+
+      <Card>
+        <CardTitle>Square thumbnail</CardTitle>
+        <CardDescription>Crop to 512×512.</CardDescription>
+        <div className="mt-4 space-y-3">
+          <Input type="file" accept="image/*" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setThumbFile(e.target.files?.[0] ?? null)} />
+          {thumbFile && (
+            <ImageCropper file={thumbFile} preset={{ width: 512, height: 512 }} onChange={(d) => onChange({ thumb: d })} />
+          )}
+          {value.thumb && !thumbFile && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={value.thumb} alt="Thumb preview" className="h-24 w-24 rounded object-cover" />
+          )}
+          {fieldError("thumb") && <p className="text-xs text-red-600">{fieldError("thumb")}</p>}
         </div>
       </Card>
 
@@ -93,13 +101,16 @@ export default function StepMedia({
 
       <Card>
         <CardTitle>Trailer URL (optional)</CardTitle>
-        <CardDescription>YouTube or other video link.</CardDescription>
+        <CardDescription>YouTube links only.</CardDescription>
         <div className="mt-3">
           <Input
             value={value.trailerUrl ?? ""}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange({ trailerUrl: e.target.value })}
-            placeholder="https://youtube.com/..."
+            placeholder="https://youtube.com/... or https://youtu.be/..."
           />
+          {!!(value.trailerUrl) && !isYouTubeUrl(value.trailerUrl) && (
+            <p className="text-xs text-red-600">Enter a valid YouTube URL</p>
+          )}
         </div>
       </Card>
     </div>

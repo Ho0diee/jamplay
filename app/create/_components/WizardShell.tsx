@@ -5,23 +5,25 @@ import { Button } from "@/components/ui/button"
 const steps: { key: string; label: string; enabled: boolean }[] = [
   { key: "basics", label: "Basics", enabled: true },
   { key: "media", label: "Media", enabled: true },
-  { key: "story", label: "Story", enabled: false },
-  { key: "mechanics", label: "Mechanics", enabled: false },
-  { key: "monetization", label: "Monetization", enabled: false },
-  { key: "settings", label: "Settings", enabled: false },
-  { key: "review", label: "Review", enabled: false },
+  { key: "gameplay", label: "Gameplay", enabled: true },
+  { key: "build", label: "Build", enabled: true },
+  { key: "community", label: "Community", enabled: true },
+  { key: "safety", label: "Safety", enabled: true },
+  { key: "review", label: "Review", enabled: true },
 ]
 
 export default function WizardShell({
   step,
   setStep,
   canContinue,
+  onTryContinue,
   onReset,
   children,
 }: {
   step: number
   setStep: (n: number) => void
   canContinue: boolean
+  onTryContinue?: () => void
   onReset?: () => void
   children: React.ReactNode
 }) {
@@ -80,7 +82,11 @@ export default function WizardShell({
             </Button>
             <Button
               size="md"
-              onClick={() => setStep(Math.min(6, step + 1))}
+              disabled={!canContinue}
+              onClick={() => {
+                onTryContinue?.()
+                if (canContinue) setStep(Math.min(6, step + 1))
+              }}
             >
               Continue
             </Button>
