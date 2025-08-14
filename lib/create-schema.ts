@@ -64,7 +64,7 @@ export const MediaSchema = z.object({
   .refine((v: string | undefined) => v === undefined || isYouTubeUrl(v), { message: "Enter a valid YouTube URL" }),
 })
 
-export const CreateDraftSchema = BasicsSchema.merge(MediaSchema.partial())
+export const CreateDraftSchema = BasicsCore.merge(MediaSchema.partial())
 export type CreateDraft = z.infer<typeof CreateDraftSchema>
 
 // Step 3: Gameplay
