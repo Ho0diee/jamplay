@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { trendingScore } from "@/lib/rankers"
-import { type Game as DemoGame } from "@/lib/demo-data"
+import { games as DEMO, type Game as DemoGame } from "@/lib/demo-data"
 import { filterByCategory, dedupeBySlug } from "@/lib/filters"
 import { CategoryPills } from "@/components/CategoryPills"
 import SortSelect, { type SortValue } from "@/components/SortSelect"
@@ -25,20 +25,21 @@ function byNewAndRising(a: Game, b: Game) {
 }
 
 export default function DiscoverPage() {
-  const [q, setQ] = useState<string>("")
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [q, setQ] = useState<string>(() => searchParams.get("q") || "")
   const selectedCategory = (searchParams.get("category") || null) as string | null
   const sort = ((searchParams.get("sort") as SortValue) || "trending") as SortValue
 
-  // Merge demo catalog with any locally published games (client only)
-  const catalog = useMemo(() => getCatalog(), [])
+  // Server-safe initial catalog (demo only); merge locals after mount to avoid hydration mismatch
+  const [catalog, setCatalog] = useState<any[]>(() => DEMO.map((g) => ({ ...g, slug: slugify(g.title) })))
 
-  // hydrate q from URL
   useEffect(() => {
-    const urlQ = searchParams.get("q") || ""
-    setQ(urlQ)
-  }, [searchParams])
+    // Enhance on client with local games
+    setCatalog(getCatalog() as any)
+  }, [])
+
+  // q is initialized from searchParams; subsequent changes sync URL in onChange
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
@@ -122,7 +123,7 @@ export default function DiscoverPage() {
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {applySort(filtered as any, sort).map((g: any) => (
-              <GameCard key={(g as any).slug ?? (g as any).id ?? g.title} game={g as any} />
+              <GameCard key={(g as any).slug} game={g as any} />
             ))}
           </div>
         </section>
@@ -136,8 +137,8 @@ export default function DiscoverPage() {
               <Link className="text-sm underline" href="/editors-picks">See all</Link>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {editors.map(g => (
-                <GameCard key={(g as any).slug ?? g.id} game={g as any} />
+              {editors.map((g: any) => (
+                <GameCard key={(g as any).slug} game={g as any} />
               ))}
             </div>
           </section>
