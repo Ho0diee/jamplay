@@ -10,8 +10,15 @@ import { visibleTags } from "@/lib/catalog"
 
 export default function GameCard({ game }: { game: any }) {
   const slug: string = (game?.slug ?? "").toString()
-  const baseLikes: number | undefined = (game?.likesAll?.total ?? 0)
-  const likes = typeof window === "undefined" ? (baseLikes ?? 0) : getDisplayLikes(baseLikes, slug)
+  const baseLikes: number = (game?.likesAll?.total ?? 0)
+  // Render baseLikes during SSR/first paint to match server HTML, then update on client
+  const [likes, setLikes] = React.useState<number>(baseLikes)
+  React.useEffect(() => {
+    setLikes(getDisplayLikes(baseLikes, slug))
+    const onLikes = () => setLikes(getDisplayLikes(baseLikes, slug))
+    window.addEventListener("likes:changed" as any, onLikes)
+    return () => window.removeEventListener("likes:changed" as any, onLikes)
+  }, [baseLikes, slug])
   const ageGuidance: string = (game?.ageGuidance ?? "everyone").toString()
   const age = ageGuidance === "teen" ? "Teen" : ageGuidance === "mature" ? "Mature" : "E"
   const cover = game?.cover || "/logo.svg"
