@@ -1,28 +1,9 @@
-"use client"
-import { useEffect, useMemo, useState } from "react"
-import { boostedTrendingScore } from "@/lib/rankers"
+import { trendingScore } from "@/lib/rankers"
 import { getCatalog } from "@/lib/catalog"
-import { getLocalLikes } from "@/lib/likes"
 import GameCard from "@/components/GameCard"
 
 export default function TrendingPage() {
-  const [likesTick, setLikesTick] = useState(0)
-  useEffect(() => {
-    const onLikes = () => setLikesTick((n: number) => n + 1)
-    window.addEventListener("likes:changed" as any, onLikes)
-    return () => window.removeEventListener("likes:changed" as any, onLikes)
-  }, [])
-
-  const items = useMemo(() => {
-    const list = getCatalog()
-    return list
-      .slice()
-      .sort((a: any, b: any) => {
-        const la = getLocalLikes((a?.slug ?? "").toString())
-        const lb = getLocalLikes((b?.slug ?? "").toString())
-        return boostedTrendingScore(b as any, lb) - boostedTrendingScore(a as any, la)
-      })
-  }, [likesTick])
+  const items = getCatalog().slice().sort((a: any, b: any) => trendingScore(b) - trendingScore(a))
   return (
     <div className="space-y-6">
       <div>
