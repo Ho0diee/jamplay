@@ -6,12 +6,14 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Input } from "@/components/ui/input"
 import { Card, CardDescription, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { trendingScore } from "@/lib/rankers"
+import { boostedTrendingScore, trendingScore } from "@/lib/rankers"
 import { games as DEMO, type Game as DemoGame } from "@/lib/demo-data"
 import { sanitizeForDisplay } from "@/lib/sanitize"
 import { dedupeBySlug } from "@/lib/filters"
 import SortSelect, { type SortValue } from "@/components/SortSelect"
 import { getCatalog, slugify } from "@/lib/catalog"
+import GameCard from "@/components/GameCard"
+import { getLocalLikes } from "@/lib/likes"
 
 function byTrending(a: any, b: any) {
   return trendingScore(b) - trendingScore(a)
@@ -33,10 +35,17 @@ export default function DiscoverPage() {
 
   // Server-safe initial catalog (demo only); merge locals after mount to avoid hydration mismatch
   const [catalog, setCatalog] = useState<any[]>(() => DEMO.map((g) => ({ ...g, slug: slugify(g.title) })))
+  const [likesTick, setLikesTick] = useState<number>(0)
 
   useEffect(() => {
     // Enhance on client with local games
     setCatalog(getCatalog() as any)
+  }, [])
+
+  useEffect(() => {
+    const onLikes = () => setLikesTick((n: number) => n + 1)
+    window.addEventListener("likes:changed" as any, onLikes)
+    return () => window.removeEventListener("likes:changed" as any, onLikes)
   }, [])
 
   // q is initialized from searchParams; subsequent changes sync URL in onChange
@@ -53,7 +62,17 @@ export default function DiscoverPage() {
     return dedupeBySlug(bySearch as any)
   }, [q, selectedCategory, catalog])
 
-  const trending = useMemo(() => [...filtered].sort(byTrending).slice(0, 6), [filtered])
+  const trending = useMemo(() => {
+    // On client, apply local likes boost; on server, fall back to base sort
+    if (typeof window === "undefined") return [...filtered].sort(byTrending).slice(0, 6)
+    return [...filtered]
+      .sort((a: any, b: any) => {
+        const la = getLocalLikes((a?.slug ?? "").toString())
+        const lb = getLocalLikes((b?.slug ?? "").toString())
+        return boostedTrendingScore(b as any, lb) - boostedTrendingScore(a as any, la)
+      })
+      .slice(0, 6)
+  }, [filtered, likesTick])
   const newRising = useMemo(() => [...filtered].sort(byNewAndRising).slice(0, 6), [filtered])
   const editors = useMemo(() => filtered.filter((g: any) => g.editorsPick).slice(0, 6), [filtered])
 
@@ -103,8 +122,8 @@ export default function DiscoverPage() {
             />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {applySort(filtered as any, sort).map((g: any) => (
-              <GameCard key={(g as any).slug} game={g as any} />
+            {applySort(filtered as any, sort, likesTick).map((g: any) => (
+              <GameCard key={(g as any).slug} game={g as any} onClick={() => router.push(`/game/${(g as any).slug}`)} />
             ))}
           </div>
         </section>
@@ -119,7 +138,7 @@ export default function DiscoverPage() {
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {editors.map((g: any) => (
-                <GameCard key={(g as any).slug} game={g as any} />
+                <GameCard key={(g as any).slug} game={g as any} onClick={() => router.push(`/game/${(g as any).slug}`)} />
               ))}
             </div>
           </section>
@@ -161,8 +180,15 @@ function GameCard({ game }: { game: any }) {
   )
 }
 
-function applySort(items: any[], sort: SortValue): any[] {
-  if (sort === "trending") return [...items].sort(byTrending)
+function applySort(items: any[], sort: SortValue, likesTick?: number): any[] {
+  if (sort === "trending") {
+    if (typeof window === "undefined") return [...items].sort(byTrending)
+    return [...items].sort((a: any, b: any) => {
+      const la = getLocalLikes((a?.slug ?? "").toString())
+      const lb = getLocalLikes((b?.slug ?? "").toString())
+      return boostedTrendingScore(b as any, lb) - boostedTrendingScore(a as any, la)
+    })
+  }
   if (sort === "new") return [...items].sort((a,b)=> Date.parse(b.publishedAt) - Date.parse(a.publishedAt))
   if (sort === "updated") return [...items].sort((a,b)=> Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
   if (sort === "editors") return items.filter((g)=> g.editorsPick)

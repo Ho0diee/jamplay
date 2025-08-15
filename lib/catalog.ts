@@ -1,4 +1,5 @@
 import { games as DEMO, type Game } from "@/lib/demo-data"
+import { slugify } from "@/lib/slug"
 
 export type CatalogGame = Game & { origin?: "demo" | "local"; slug?: string }
 
@@ -12,7 +13,13 @@ export function getCatalog(): CatalogGame[] {
     const raw = localStorage.getItem("myGames")
     if (raw) {
       const arr = JSON.parse(raw) as CatalogGame[]
-      local = (Array.isArray(arr) ? arr : []).map((g) => ({ ...g, origin: "local", slug: g.slug ?? slugify(g.title) }))
+      local = (Array.isArray(arr) ? arr : []).map((g) => ({
+        ...g,
+        origin: "local",
+        slug: g.slug ?? slugify(g.title),
+        likes7d: (g as any).likes7d ?? { up: 0, total: 0 },
+        likesAll: (g as any).likesAll ?? { up: 0, total: 0 },
+      }))
     }
   } catch {}
   // Dedup by slug, prefer local over demo
@@ -24,6 +31,4 @@ export function getCatalog(): CatalogGame[] {
   return Array.from(bySlug.values())
 }
 
-export function slugify(s: string): string {
-  return s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")
-}
+// slugify is re-exported from lib/slug

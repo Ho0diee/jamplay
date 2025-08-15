@@ -2,12 +2,11 @@
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import WizardShell from "./_components/WizardShell";
-// Inline Basics, Gameplay, and Review to meet new spec without touching other components
+// Inline Basics and Review to meet new spec without touching other components
 import StepBuild from "./_components/StepBuild";
-import StepSafety from "./_components/StepSafety";
-import { BasicsSchema, MediaSchema, GameplaySchema, BuildSchema, SafetySchema, type CreateDraft } from "@/lib/create-schema";
+// Safety is inlined here to control banner gating
+import { BasicsSchema, MediaSchema, BuildSchema, SafetySchema, type CreateDraft } from "@/lib/create-schema";
 import { slugify } from "@/lib/slug";
-import { createGameAction } from "./actions";
 import { checkBanned } from "@/lib/banlist";
 import ImageCropper from "./_components/ImageCropper";
 import { Input } from "@/components/ui/input";
@@ -21,7 +20,9 @@ export default function CreateForm() {
   const searchParams = useSearchParams();
   const originalSlugRef = React.useRef<string | null>(null);
   // logical steps: 0 basics, 1 media, 2 gameplay, 3 build, 4 safety, 5 review
+  // new logical steps: 0 basics, 1 media, 2 build, 3 safety, 4 review (gameplay & community removed)
   const [lstep, setLStep] = React.useState(0);
+  const [attempted, setAttempted] = React.useState<Set<number>>(new Set());
   const [draft, setDraft] = React.useState<CreateDraft>({
     title: "",
     category: "",
@@ -30,7 +31,6 @@ export default function CreateForm() {
     trailerUrl: "",
     description: "",
     instructions: "",
-    controls: "",
     sessionLength: "",
     launchType: undefined,
     playUrlOrTemplateId: "",
@@ -68,7 +68,6 @@ export default function CreateForm() {
         trailerUrl: item.trailer || "",
         description: item.description || "",
         instructions: item.instructions || "",
-        controls: item.controls || "",
         sessionLength: typeof item.sessionLength === "string"
           ? item.sessionLength
           : item.sessionLength?.type === "single"
@@ -92,8 +91,9 @@ export default function CreateForm() {
   const basicsRes = React.useMemo(() => BasicsSchema.safeParse({
     title: draft.title,
     category: draft.category,
+    description: draft.description,
     slug: slugify(draft.title || ""),
-  }), [draft.title, draft.category]);
+  }), [draft.title, draft.category, draft.description]);
 
   const mediaRes = React.useMemo(() => MediaSchema.safeParse({
     cover: draft.cover,
@@ -101,17 +101,13 @@ export default function CreateForm() {
     trailerUrl: draft.trailerUrl || undefined,
   }), [draft.cover, draft.gallery, draft.trailerUrl]);
 
-  const gameplayRes = React.useMemo(() => GameplaySchema.safeParse({
-    description: draft.description,
-    instructions: draft.instructions,
-    sessionLength: draft.sessionLength,
-  }), [draft.description, draft.instructions, draft.sessionLength]);
-
   const buildRes = React.useMemo(() => BuildSchema.safeParse({
     launchType: draft.launchType,
     playUrlOrTemplateId: draft.playUrlOrTemplateId,
     version: draft.version || "1",
-  }), [draft.launchType, draft.playUrlOrTemplateId, draft.version]);
+  instructions: draft.instructions,
+  sessionLength: draft.sessionLength,
+  }), [draft.launchType, draft.playUrlOrTemplateId, draft.version, draft.instructions, draft.sessionLength]);
 
   const safetyRes = React.useMemo(() => SafetySchema.safeParse({
     rightsConfirmed: !!draft.rightsConfirmed,
@@ -121,52 +117,66 @@ export default function CreateForm() {
   
   const logicalValid = lstep === 0 ? basicsRes.success
     : lstep === 1 ? mediaRes.success
-    : lstep === 2 ? gameplayRes.success
-    : lstep === 3 ? buildRes.success
-    : lstep === 4 ? safetyRes.success
+    : lstep === 2 ? buildRes.success
+    : lstep === 3 ? safetyRes.success
     : true;
 
   async function onPublish() {
     // validate required steps
-    const req = [basicsRes, mediaRes, gameplayRes, buildRes, safetyRes];
+    const req = [basicsRes, mediaRes, buildRes, safetyRes];
     for (let i = 0; i < req.length; i++) {
       if (!req[i].success) { setLStep(i); return; }
     }
-    const res = await createGameAction({ title: (draft.title || "").trim(), description: (draft.description || "").trim() });
-    if (!res.ok) { return; }
-    const slug = res.slug;
     const nowIso = new Date().toISOString();
-    const game: any = {
-      slug,
-      title: (draft.title || "").trim(),
-      description: (draft.description || "").trim(),
-      category: draft.category || undefined,
-      cover: draft.cover || "/logo.svg",
-      gallery: draft.gallery,
-      trailer: draft.trailerUrl || undefined,
-      publishedAt: nowIso,
-      updatedAt: nowIso,
-      plays48h: 0,
-      likes7d: { up: 0, total: 0 },
-      likesAll: { up: 0, total: 0 },
-      editorsPick: false,
-      version: 1,
-      origin: "local" as const,
-    };
+    const computedSlug = slugify(draft.title || "");
+    let existingVersion = 0
+    let finalSlug = computedSlug
     try {
-      const raw = localStorage.getItem("myGames");
-      const arr = raw ? (JSON.parse(raw) as any[]) : [];
-      const bySlug = new Map<string, any>();
+      const raw = localStorage.getItem("myGames")
+      const arr = raw ? (JSON.parse(raw) as any[]) : []
+      const bySlug = new Map<string, any>()
       for (const g of Array.isArray(arr) ? arr : []) {
-        const gs = (g?.slug || "").toString().toLowerCase();
-        if (gs) bySlug.set(gs, g);
+        const gs = (g?.slug || "").toString().toLowerCase()
+        if (gs) bySlug.set(gs, g)
       }
-      const original = originalSlugRef.current?.toLowerCase() || null;
-      if (original && original !== slug.toLowerCase()) bySlug.delete(original);
-      bySlug.set(slug.toLowerCase(), game);
-      localStorage.setItem("myGames", JSON.stringify(Array.from(bySlug.values())));
+      const original = originalSlugRef.current?.toLowerCase() || null
+      if (original) {
+        const og = bySlug.get(original)
+        if (og && typeof og.version === "number") existingVersion = og.version
+      }
+      // finalize slug and construct object
+      finalSlug = computedSlug
+      const game: any = {
+        slug: finalSlug,
+        title: (draft.title || "").trim(),
+        description: (draft.description || "").trim(),
+        instructions: (draft.instructions || "").trim(),
+        sessionLength: draft.sessionLength || "",
+        category: draft.category || undefined,
+        cover: draft.cover || "/logo.svg",
+        gallery: draft.gallery,
+        trailer: draft.trailerUrl || undefined,
+        launchType: draft.launchType,
+        playUrlOrTemplateId: draft.playUrlOrTemplateId,
+        publishedAt: nowIso,
+        updatedAt: nowIso,
+        plays48h: 0,
+        likes7d: { up: 0, total: 0 },
+        likesAll: { up: 0, total: 0 },
+        version: existingVersion || Number(draft.version) || 1,
+        origin: "local" as const,
+        visibility: "public",
+      }
+
+      // merge into localStorage by slug; delete old if editing and slug changed
+      if (original && original !== finalSlug.toLowerCase()) bySlug.delete(original)
+      bySlug.set(finalSlug.toLowerCase(), game)
+      localStorage.setItem("myGames", JSON.stringify(Array.from(bySlug.values())))
     } catch {}
-    router.push(`/game/${slug}`);
+    try {
+      window.dispatchEvent(new CustomEvent("catalog:changed", { detail: { slug: finalSlug } }))
+    } catch {}
+    router.push(`/game/${finalSlug}`)
   }
 
   function onSaveDraft() {
@@ -178,31 +188,41 @@ export default function CreateForm() {
   // Always-visible errors
   const basicsErrors = basicsRes.success ? undefined : basicsRes.error.flatten();
   const mediaErrors = mediaRes.success ? undefined : mediaRes.error.flatten();
-  const gameplayErrors = gameplayRes.success ? undefined : gameplayRes.error.flatten();
   const buildErrors = buildRes.success ? undefined : buildRes.error.flatten();
   const safetyErrors = safetyRes.success ? undefined : safetyRes.error.flatten();
   const bannedTitle = checkBanned(draft.title || "");
   const bannedDesc = checkBanned(draft.description || "");
-  
-  // Map logical step to WizardShell UI step (community at 4 is skipped visually by mapping to safety)
+
+  // Map logical to UI steps, skipping Gameplay (2) and Community (4) in the shell.
   // UI steps (WizardShell): 0 basics, 1 media, 2 gameplay, 3 build, 4 community, 5 safety, 6 review
-  // Logical steps:         0 basics, 1 media, 2 gameplay, 3 build,            4 safety, 5 review
-  const uiStep = lstep < 4 ? lstep : (lstep === 4 ? 5 : 6)
+  // Logical steps:          0 basics, 1 media,            2 build,             3 safety, 4 review
+  const uiStep = lstep === 0 ? 0 : lstep === 1 ? 1 : lstep === 2 ? 3 : lstep === 3 ? 5 : 6
   const setUIStep = (idx: number) => {
-    if (idx <= 3) return setLStep(idx)
-    if (idx === 4) return setLStep(4) // community button jumps to safety
-    if (idx === 5) return setLStep(4) // safety
-    return setLStep(5) // review
+    // Route gameplay (2) to build (logical 2), community (4) to safety (logical 3)
+    if (idx === 0) return setLStep(0)
+    if (idx === 1) return setLStep(1)
+    if (idx === 2 || idx === 3) return setLStep(2)
+    if (idx === 4 || idx === 5) return setLStep(3)
+    return setLStep(4)
   }
-  const finalCanContinue = (uiStep === 6 ? false : logicalValid) && !(lstep === 0 && !bannedTitle.ok) && !(lstep === 2 && !bannedDesc.ok);
+  const finalCanContinue = (uiStep === 6 ? false : logicalValid) && !(lstep === 0 && (!bannedTitle.ok || !bannedDesc.ok));
+
+  const onTryContinue = React.useCallback(() => {
+    setAttempted((prev: Set<number>) => new Set([...prev, lstep]))
+  }, [lstep])
 
   return (
-    <WizardShell step={uiStep} setStep={setUIStep} canContinue={finalCanContinue}>
+  <WizardShell step={uiStep} setStep={setUIStep} canContinue={finalCanContinue} onTryContinue={onTryContinue}>
       {uiStep === 0 && (
         <div className="space-y-6">
-          {(!bannedTitle.ok || basicsErrors) && (
+          {attempted.has(0) && (!bannedTitle.ok || !bannedDesc.ok || basicsErrors) && (
             <div className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800">
-              { !bannedTitle.ok ? "Banned words detected in title." : Object.values(basicsErrors!.fieldErrors || {})[0]?.[0] }
+              { !bannedTitle.ok
+                ? "Banned words detected in title."
+                : (!bannedDesc.ok
+                  ? "Banned words detected in description."
+                  : ((basicsErrors as any)?.fieldErrors && (Object.values((basicsErrors as any).fieldErrors)[0] as any)?.[0])
+                ) }
             </div>
           )}
           <Card>
@@ -228,8 +248,10 @@ export default function CreateForm() {
                 {basicsErrors?.fieldErrors?.category?.[0] && <p className="mt-1 text-xs text-red-600">{(basicsErrors.fieldErrors as any).category[0]}</p>}
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">One-sentence description (max 22 words)</label>
+    <label className="mb-1 block text-sm font-medium">One-sentence description (max 20 words)</label>
                 <Input value={draft.description} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>patch({ description: e.target.value })} placeholder="Pitch your game in one sentence" />
+    {!bannedDesc.ok && <p className="mt-1 text-xs text-red-600">Please remove banned words.</p>}
+    {basicsErrors?.fieldErrors?.description?.[0] && <p className="mt-1 text-xs text-red-600">{(basicsErrors.fieldErrors as any).description[0]}</p>}
               </div>
             </div>
           </Card>
@@ -237,7 +259,7 @@ export default function CreateForm() {
       )}
   {uiStep === 1 && (
         <div className="space-y-6">
-          {mediaErrors && (
+    {attempted.has(1) && mediaErrors && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">Please fix the highlighted errors.</div>
           )}
           <Card>
@@ -305,44 +327,63 @@ export default function CreateForm() {
           </Card>
         </div>
       )}
-      {uiStep === 2 && (
+  {uiStep === 3 && (
         <div className="space-y-6">
-          {(!gameplayRes.success || !checkBanned(draft.description || "").ok) && (
-            <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800">{!checkBanned(draft.description || "").ok ? "Banned words detected in description." : (Object.values(gameplayErrors!.fieldErrors || {})[0]?.[0] ?? "Fix errors below.")}</div>
+          {attempted.has(2) && buildErrors && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">Please fix the highlighted errors.</div>
           )}
+          <StepBuild value={draft} onChange={patch} errors={buildErrors as any} />
           <Card>
-            <CardTitle>Gameplay</CardTitle>
-            <CardDescription>Describe how it plays and what to expect.</CardDescription>
-            <div className="mt-4 space-y-4">
-              <div>
-                <label className="mb-1 block text-sm font-medium">One-sentence description (max 22 words)</label>
-                <Input value={draft.description} onChange={(e)=>patch({ description: e.target.value })} placeholder="A concise one-sentence description" />
-                {!bannedDesc.ok && <p className="mt-1 text-xs text-red-600">Please remove banned words.</p>}
-                {gameplayErrors?.fieldErrors?.description?.[0] && <p className="mt-1 text-xs text-red-600">{gameplayErrors.fieldErrors.description[0]}</p>}
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Instructions</label>
-                <Textarea value={draft.instructions || ""} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>)=>patch({ instructions: e.target.value })} placeholder="Explain how the game works and the controls. Keep it concise." />
-                {gameplayErrors?.fieldErrors?.instructions?.[0] && <p className="mt-1 text-xs text-red-600">{gameplayErrors.fieldErrors.instructions[0]}</p>}
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Controls</label>
-                <Input value={draft.controls || ""} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>patch({ controls: e.target.value })} placeholder="e.g., WASD to move, Space to jump" />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium">Session length</label>
-                <Input value={draft.sessionLength || ""} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>patch({ sessionLength: e.target.value })} placeholder="e.g., 10–20 minutes" />
-                {gameplayErrors?.fieldErrors?.sessionLength?.[0] && <p className="mt-1 text-xs text-red-600">{(gameplayErrors.fieldErrors as any).sessionLength[0]}</p>}
-              </div>
+            <CardTitle>Instructions</CardTitle>
+            <CardDescription>Explain how to play. Keep it concise.</CardDescription>
+            <div className="mt-4 space-y-3">
+              <Textarea value={draft.instructions || ""} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>)=>patch({ instructions: e.target.value })} placeholder="Explain how the game works." />
+              {buildErrors?.fieldErrors?.instructions?.[0] && <p className="mt-1 text-xs text-red-600">{(buildErrors.fieldErrors as any).instructions[0]}</p>}
+            </div>
+          </Card>
+          <Card>
+            <CardTitle>Session length</CardTitle>
+            <CardDescription>Use minutes (1–300) or a range like 10-20.</CardDescription>
+            <div className="mt-4">
+              <Input value={draft.sessionLength || ""} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>patch({ sessionLength: e.target.value })} placeholder="e.g., 10-20" />
+              {buildErrors?.fieldErrors?.sessionLength?.[0] && <p className="mt-1 text-xs text-red-600">{(buildErrors.fieldErrors as any).sessionLength[0]}</p>}
             </div>
           </Card>
         </div>
       )}
-  {uiStep === 3 && (
-        <StepBuild value={draft} onChange={patch} errors={buildErrors as any} />
-      )}
       {uiStep === 5 && (
-        <StepSafety value={draft} onChange={patch} errors={safetyErrors as any} />
+        <div className="space-y-6">
+          {attempted.has(3) && safetyErrors && (
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">Please fix the highlighted errors.</div>
+          )}
+          <Card>
+            <CardTitle>Safety & Rights</CardTitle>
+            <CardDescription>Confirm you have rights and agree to policies.</CardDescription>
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center gap-2 text-sm">
+                <input id="rights" type="checkbox" checked={!!draft.rightsConfirmed} onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ rightsConfirmed: e.target.checked })} />
+                <label htmlFor="rights">I confirm I have the rights to publish this content.</label>
+              </div>
+              {(safetyErrors as any)?.fieldErrors?.rightsConfirmed?.[0] && <p className="-mt-2 text-xs text-red-600">{(safetyErrors as any).fieldErrors.rightsConfirmed[0]}</p>}
+
+              <div className="flex items-center gap-2 text-sm">
+                <input id="policy" type="checkbox" checked={!!draft.policyConfirmed} onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ policyConfirmed: e.target.checked })} />
+                <label htmlFor="policy">I agree to the content policy and community guidelines.</label>
+              </div>
+              {(safetyErrors as any)?.fieldErrors?.policyConfirmed?.[0] && <p className="-mt-2 text-xs text-red-600">{(safetyErrors as any).fieldErrors.policyConfirmed[0]}</p>}
+
+              <div>
+                <label className="mb-1 block text-sm font-medium">Age guidance</label>
+                <Select value={draft.ageGuidance as string | undefined} onValueChange={(v) => patch({ ageGuidance: v as any })}>
+                  {[{value:"everyone",label:"Everyone"},{value:"teen",label:"Teen"},{value:"mature",label:"Mature"}].map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </Select>
+                {(safetyErrors as any)?.fieldErrors?.ageGuidance?.[0] && <p className="mt-1 text-xs text-red-600">{(safetyErrors as any).fieldErrors.ageGuidance[0]}</p>}
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
       {uiStep === 6 && (
         <div className="space-y-6">

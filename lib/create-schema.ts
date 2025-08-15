@@ -9,6 +9,7 @@ const BasicsCore = z.object({
   title: z.string().trim().min(4, "Min 4 characters").max(80, "Max 80 characters"),
   // tagline removed; tags removed
   category: z.string().min(1, "Category is required"),
+  description: z.string().trim().refine((s: string) => isOneSentenceMaxWords(s, 20), { message: "One sentence, max 20 words" }),
   // slug is auto, readonly preview; still validate shape locally for safety
   slug: z.string().transform((s: string) => slugify(s)).superRefine((val: string, ctx: RefinementCtx) => {
     const fmt = validateSlugFormat(val)
@@ -56,9 +57,7 @@ export const MediaSchema = z.object({
 export const CreateDraftSchema = BasicsCore
   .merge(MediaSchema.partial())
   .merge(z.object({
-    description: z.string().optional(),
-    instructions: z.string().optional(),
-    controls: z.string().optional(),
+  instructions: z.string().optional(),
     sessionLength: z.string().optional(),
   }))
   .merge(z.object({
@@ -75,27 +74,9 @@ export const CreateDraftSchema = BasicsCore
   }))
 export type CreateDraft = z.infer<typeof CreateDraftSchema>
 
-// Step 3: Gameplay
-export const GameplaySchema = z.object({
-  description: z.string().trim().refine((s: string) => isOneSentence22Words(s), { message: "One sentence, max 22 words" }),
-  instructions: z.string().trim().min(1, "Instructions are required"),
-  // Presets + optional custom lines handled in UI; store as string for now
-  controls: z.string().optional(),
-  sessionLength: z.string().min(1, "Session length is required").transform((v: string, ctx: RefinementCtx) => {
-    const s = v.trim()
-    if (/^\d+$/.test(s)) {
-      const m = parseInt(s, 10)
-      if (m >= 1 && m <= 300) return { type: "single" as const, minutes: m }
-    } else if (/^(\d+)-(\d+)$/.test(s)) {
-      const [, a, b] = s.match(/^(\d+)-(\d+)$/) as RegExpMatchArray
-      const min = parseInt(a, 10)
-      const max = parseInt(b, 10)
-      if (min >= 1 && max <= 300 && min < max) return { type: "range" as const, min, max }
-    }
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Use minutes (1–300) or m-n range", path: ["sessionLength"] })
-    return z.NEVER
-  }),
-})
+// No Gameplay step; its key fields moved as follows:
+// - description validated in Basics
+// - instructions and sessionLength validated in Build
 
 export function parseSessionLength(input: string): { type: "single"; minutes: number } | { type: "range"; min: number; max: number } | null {
   const s = (input ?? "").trim();
@@ -115,7 +96,7 @@ export function parseSessionLength(input: string): { type: "single"; minutes: nu
 }
 
 // Helpers
-export function isOneSentence22Words(s: string): boolean {
+export function isOneSentenceMaxWords(s: string, maxWords: number): boolean {
   const text = (s ?? "").trim()
   if (!text) return false
   // Must be a single sentence: allow one terminal punctuation .!? at end
@@ -123,7 +104,7 @@ export function isOneSentence22Words(s: string): boolean {
   if (sentenceBreaks.length > 1) return false
   // Count words
   const words = text.split(/\s+/).filter(Boolean)
-  return words.length > 0 && words.length <= 22
+  return words.length > 0 && words.length <= Math.max(1, maxWords)
 }
 // Step 4: Build & Access
 export const BuildSchema = z.object({
@@ -131,6 +112,23 @@ export const BuildSchema = z.object({
   playUrlOrTemplateId: z.string().min(1, "Required").optional(),
   version: z.string().regex(/^\d+$/, "Version must be an integer").transform((s: string) => s || "1"),
   changelog: z.string().max(200).optional(),
+  instructions: z.string().trim().min(1, "Instructions are required"),
+  sessionLength: z.string().min(1, "Session length is required").transform((v: string, ctx: RefinementCtx) => {
+    const s = (v ?? "").trim()
+    if (/^\d+$/.test(s)) {
+      const m = parseInt(s, 10)
+      if (m >= 1 && m <= 300) return { type: "single" as const, minutes: m }
+    } else {
+      const m = s.match(/^(\d+)-(\d+)$/)
+      if (m) {
+        const min = parseInt(m[1], 10)
+        const max = parseInt(m[2], 10)
+        if (min >= 1 && max <= 300 && min < max) return { type: "range" as const, min, max }
+      }
+    }
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Use minutes (1–300) or m-n range", path: ["sessionLength"] })
+    return z.NEVER
+  }),
 }).refine((v: { launchType?: string; playUrlOrTemplateId?: string }) => {
   // Require playUrlOrTemplateId when launchType is any of the allowed options
   if (!v.launchType) return false

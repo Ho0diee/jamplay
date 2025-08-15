@@ -1,6 +1,7 @@
 "use client"
 import * as React from "react"
 import { CreateDraft, CreateDraftSchema } from "@/lib/create-schema"
+import { slugify } from "@/lib/slug"
 
 const STORAGE_KEY = "createDraft"
 
@@ -10,9 +11,17 @@ export function useCreateDraft() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (!raw) return { visibility: "draft" } as CreateDraft
-      const parsed = JSON.parse(raw)
-      const res = CreateDraftSchema.safeParse(parsed)
-      return (res.success ? res.data : { visibility: "draft" }) as CreateDraft
+  const parsed = JSON.parse(raw)
+  // Lenient migration: ensure required keys exist and strip removed ones
+  const migrated: any = { ...(parsed || {}) }
+  // Remove legacy/unused fields
+  delete migrated.controls
+  // Ensure slug is present and coherent with title for schema validation
+  if (!migrated.slug) migrated.slug = slugify(migrated.title ?? "")
+  // Default sensible values
+  if (!migrated.visibility) migrated.visibility = "draft"
+  const res = CreateDraftSchema.safeParse(migrated)
+  return (res.success ? res.data : { visibility: "draft" }) as CreateDraft
     } catch {
       return { visibility: "draft" } as CreateDraft
     }
@@ -26,11 +35,19 @@ export function useCreateDraft() {
   }, [draft])
 
   const update = React.useCallback((patch: Partial<CreateDraft>) => {
-    setDraft((d: CreateDraft) => ({ ...d, ...patch }))
+    setDraft((d: CreateDraft) => {
+      const next = { ...d, ...patch } as any
+      // keep slug aligned to title for previews
+      if (typeof next.title === "string") next.slug = slugify(next.title)
+      return next as CreateDraft
+    })
   }, [])
 
   const setFromObject = React.useCallback((obj: Partial<CreateDraft>) => {
-    setDraft(() => ({ ...(obj as CreateDraft) }))
+    const clean: any = { ...(obj as any) }
+    delete clean.controls
+    if (!clean.slug && typeof clean.title === "string") clean.slug = slugify(clean.title)
+    setDraft(() => ({ ...(clean as CreateDraft) }))
   }, [])
 
   const reset = React.useCallback(() => {

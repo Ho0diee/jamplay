@@ -52,3 +52,10 @@ export function topRatedThisWeekScore(game: RankableGame): number {
   if (total < 20) score *= total / 20
   return score * 100
 }
+
+// Client-side helper: add a small boost from local likes
+export function boostedTrendingScore(game: RankableGame, localLikes: number): number {
+  const base = trendingScore(game)
+  const boost = 0.1 * Math.sqrt(Math.max(0, localLikes || 0))
+  return base + boost
+}

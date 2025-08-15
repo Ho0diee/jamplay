@@ -12,7 +12,7 @@ export default function ProfilePanel() {
   const [drafts, setDrafts] = React.useState<GameLite[]>([]);
   const [lastUpdated, setLastUpdated] = React.useState<string | null>(null);
 
-  React.useEffect(() => {
+  const refresh = React.useCallback(() => {
     try {
       const raw = localStorage.getItem("myGames");
       const arr = raw ? (JSON.parse(raw) as any[]) : [];
@@ -29,7 +29,21 @@ export default function ProfilePanel() {
       const d = localStorage.getItem("createDraft");
       if (d) setLastUpdated(new Date().toLocaleString());
     } catch {}
-  }, []);
+  }, [])
+
+  React.useEffect(() => {
+    refresh()
+    const onCatalog = () => refresh()
+    const onStorage = (e: StorageEvent) => {
+      if (!e || e.key === null || e.key === "myGames" || e.key === "createDraft") refresh()
+    }
+    window.addEventListener("catalog:changed" as any, onCatalog)
+    window.addEventListener("storage", onStorage)
+    return () => {
+      window.removeEventListener("catalog:changed" as any, onCatalog)
+      window.removeEventListener("storage", onStorage)
+    }
+  }, [refresh])
 
   const del = (slug: string) => {
     if (!confirm("Delete this entry?")) return;
@@ -40,6 +54,7 @@ export default function ProfilePanel() {
       localStorage.setItem("myGames", JSON.stringify(next));
   setPublished((l: GameLite[]) => l.filter((g: GameLite) => g.slug !== slug));
   setDrafts((l: GameLite[]) => l.filter((g: GameLite) => g.slug !== slug));
+  try { window.dispatchEvent(new CustomEvent("catalog:changed", { detail: { slug } })) } catch {}
     } catch {}
   };
 
