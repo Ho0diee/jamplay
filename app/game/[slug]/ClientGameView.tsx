@@ -15,20 +15,24 @@ function titleCaseFromSlug(slug: string) {
 
 export default function ClientGameView({ slug }: { slug: string }) {
   const [game, setGame] = React.useState<any | null>(null)
-  const [baseLikes, setBaseLikes] = React.useState<number>(0)
 
   React.useEffect(() => {
     const list = getCatalog() as any[]
     const found = list.find((g) => (g?.slug ?? "").toString().toLowerCase() === slug.toLowerCase())
     setGame(found ?? null)
-    setBaseLikes((found?.likesAll?.total ?? 0) as number)
-    const onLikes = () => setBaseLikes((found?.likesAll?.total ?? 0) as number)
-    window.addEventListener("likes:changed" as any, onLikes)
-    return () => window.removeEventListener("likes:changed" as any, onLikes)
+  // No need to listen for likes to update base; local likes are handled in LikeButton and separate display state below
+  return () => {}
   }, [slug])
 
   const title = game?.title ? (game.title as string) : titleCaseFromSlug(slug)
-  const totalLikes = (game?.likesAll?.total ?? 0) + (typeof window === "undefined" ? 0 : getLocalLikes(slug))
+  const baseLikes = (game?.likesAll?.total ?? 0) as number
+  const [totalLikes, setTotalLikes] = React.useState<number>(baseLikes)
+  React.useEffect(() => {
+    setTotalLikes(baseLikes + getLocalLikes(slug))
+    const onLikes = () => setTotalLikes(baseLikes + getLocalLikes(slug))
+    window.addEventListener("likes:changed" as any, onLikes)
+    return () => window.removeEventListener("likes:changed" as any, onLikes)
+  }, [baseLikes, slug])
   const tags = visibleTags(game)
   const shown = tags.slice(0, 3)
   const remaining = Math.max(0, tags.length - shown.length)
@@ -52,9 +56,9 @@ export default function ClientGameView({ slug }: { slug: string }) {
             </div>
           )}
         </div>
-        <LikeButton slug={slug} baseLikes={baseLikes} />
+  <LikeButton slug={slug} baseLikes={baseLikes} />
       </div>
-      <div className="text-sm text-neutral-600">Total likes: {totalLikes}</div>
+  <div className="text-sm text-neutral-600">Total likes: <span suppressHydrationWarning>{totalLikes}</span></div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
           <div className="text-sm text-neutral-600">Placeholder cover</div>

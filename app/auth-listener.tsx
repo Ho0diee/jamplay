@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 export default function AuthListener() {
   useEffect(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    // If not configured, skip auth syncing entirely
+    if (!url || !key) return
+
+    const supabase: SupabaseClient = createClient(url, key)
+
     const sync = async (event: string, session: any) => {
       await fetch("/auth/callback", {
         method: "POST",
@@ -33,7 +35,7 @@ export default function AuthListener() {
     });
 
     // 3) Keep syncing on changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       sync(event, session);
     });
 
