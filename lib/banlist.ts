@@ -30,6 +30,8 @@ export const BANNED_TEXT: (string | RegExp)[] = [
 
 // Runtime-extendable entries (from attachments or ops input without committing words to repo)
 const RUNTIME: RegExp[] = []
+// Cache for remotely loaded text list (public/banned_words_list.txt)
+let REMOTE_CACHE: RegExp[] | null = null
 
 function toWordRegex(w: string): RegExp {
   const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
@@ -75,8 +77,28 @@ export function addBanned(entries: Array<string | RegExp>): void {
   RUNTIME.push(...deduped)
 }
 
+async function loadRemoteList(): Promise<RegExp[]> {
+  if (typeof window === "undefined") return []
+  if (REMOTE_CACHE) return REMOTE_CACHE
+  try {
+    const res = await fetch("/banned_words_list.txt", { cache: "force-cache" })
+    if (!res.ok) return []
+    const text = await res.text()
+    const terms = text
+      .split(/[\n,;]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+    REMOTE_CACHE = uniqRegex(terms.map(toWordRegex))
+    return REMOTE_CACHE
+  } catch {
+    return []
+  }
+}
+
 export function getBannedList(): (string | RegExp)[] {
-  return [...BANNED, ...RUNTIME, ...loadExtraFromLocalStorage()]
+  // Note: synchronous callers won't have remote terms on first run;
+  // UI should call initBanlist() once to warm the cache.
+  return [...BANNED, ...RUNTIME, ...(REMOTE_CACHE ?? []), ...loadExtraFromLocalStorage()]
 }
 
 export function checkBanned(s: string, list?: (string | RegExp)[]): { ok: boolean; hits: string[] } {
@@ -115,4 +137,11 @@ export function findBanned(value: string): BannedHit[] {
 
 export function hasBanned(value: string): boolean {
   return findBanned(value).length > 0
+}
+
+// Allow UI to warm-fetch the remote list on app load
+export async function initBanlist(): Promise<void> {
+  try {
+    await loadRemoteList()
+  } catch {}
 }
