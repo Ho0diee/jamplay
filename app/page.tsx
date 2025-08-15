@@ -4,14 +4,12 @@ import { useEffect, useMemo, useState, type ChangeEvent } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Input } from "@/components/ui/input"
-import { Card, CardDescription, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { boostedTrendingScore, trendingScore } from "@/lib/rankers"
 import { games as DEMO, type Game as DemoGame } from "@/lib/demo-data"
-import { sanitizeForDisplay } from "@/lib/sanitize"
 import { dedupeBySlug } from "@/lib/filters"
 import SortSelect, { type SortValue } from "@/components/SortSelect"
-import { getCatalog, slugify } from "@/lib/catalog"
+import { getCatalog } from "@/lib/catalog"
+import { slugify } from "@/lib/slug"
 import GameCard from "@/components/GameCard"
 import { getLocalLikes } from "@/lib/likes"
 
@@ -161,22 +159,6 @@ function Section({ title, items, seeAllHref }: { title: string; items: DemoGame[
         ))}
       </div>
     </section>
-  )
-}
-
-function GameCard({ game }: { game: any }) {
-  return (
-    <Card className="overflow-hidden">
-      <div className="h-28 w-full bg-gradient-to-br from-neutral-100 to-neutral-200" aria-hidden />
-      <div className="p-4 space-y-1">
-  <CardTitle className="line-clamp-1">{sanitizeForDisplay(game.title || "")}</CardTitle>
-  <CardDescription className="line-clamp-2">{sanitizeForDisplay(game.description || "")}</CardDescription>
-  <div className="mt-2 text-xs text-neutral-500">&nbsp;</div>
-        {(game as any).origin === "local" && (
-          <div className="mt-2 text-[10px] uppercase tracking-wide text-neutral-500">Your game</div>
-        )}
-      </div>
-    </Card>
   )
 }
 
