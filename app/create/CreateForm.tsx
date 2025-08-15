@@ -6,7 +6,7 @@ import WizardShell from "./_components/WizardShell";
 // Safety is inlined here to control banner gating
 import { BasicsSchema, MediaSchema, BuildSchema, SafetySchema, type CreateDraft } from "@/lib/create-schema";
 import { slugify } from "@/lib/slug";
-import { checkBanned } from "@/lib/banlist";
+import { findBanned, type BannedHit } from "@/lib/banlist";
 import ImageCropper from "./_components/ImageCropper";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -46,6 +46,12 @@ export default function CreateForm() {
   const [galleryQueue, setGalleryQueue] = React.useState<File[]>([]);
   const [galleryWorking, setGalleryWorking] = React.useState<File | null>(null);
   const [pendingGallery, setPendingGallery] = React.useState<string | null>(null);
+
+  // Banned words tracking for specific fields
+  const [banned, setBanned] = React.useState<{ title: BannedHit[]; description: BannedHit[]; instructions: BannedHit[] }>(
+    { title: [], description: [], instructions: [] }
+  )
+  const hasAnyBanned = (banned.title.length + banned.description.length + banned.instructions.length) > 0
 
   const patch = (p: Partial<CreateDraft>) => setDraft((d: CreateDraft) => ({ ...d, ...p }));
 
@@ -123,6 +129,7 @@ export default function CreateForm() {
     : true;
 
   async function onPublish() {
+  if (hasAnyBanned) return
     // validate required steps
     const req = [basicsRes, mediaRes, buildRes, safetyRes];
     for (let i = 0; i < req.length; i++) {
@@ -191,30 +198,44 @@ export default function CreateForm() {
   const mediaErrors = mediaRes.success ? undefined : mediaRes.error.flatten();
   const buildErrors = buildRes.success ? undefined : buildRes.error.flatten();
   const safetyErrors = safetyRes.success ? undefined : safetyRes.error.flatten();
-  const bannedTitle = checkBanned(draft.title || "");
-  const bannedDesc = checkBanned(draft.description || "");
+  // compute inline banned on change (immediate)
+  React.useEffect(() => {
+  setBanned((prev: { title: BannedHit[]; description: BannedHit[]; instructions: BannedHit[] }) => ({ ...prev, title: findBanned(draft.title || "") }))
+  }, [draft.title])
+  React.useEffect(() => {
+  setBanned((prev: { title: BannedHit[]; description: BannedHit[]; instructions: BannedHit[] }) => ({ ...prev, description: findBanned(draft.description || "") }))
+  }, [draft.description])
+  React.useEffect(() => {
+  setBanned((prev: { title: BannedHit[]; description: BannedHit[]; instructions: BannedHit[] }) => ({ ...prev, instructions: findBanned(draft.instructions || "") }))
+  }, [draft.instructions])
 
   // UI steps now match shell directly: 0 basics, 1 media, 2 build, 3 safety, 4 review
   const uiStep = lstep
   const setUIStep = (idx: number) => setLStep(Math.max(0, Math.min(4, idx)))
-  const finalCanContinue = (uiStep === 4 ? false : logicalValid) && !(lstep === 0 && (!bannedTitle.ok || !bannedDesc.ok))
+  const finalCanContinue = (uiStep === 4 ? false : logicalValid) && !hasAnyBanned
 
   const onTryContinue = React.useCallback(() => {
     setAttempted((prev: Set<number>) => new Set([...prev, lstep]))
   }, [lstep])
 
   return (
-  <WizardShell step={uiStep} setStep={setUIStep} canContinue={finalCanContinue} onTryContinue={onTryContinue}>
+  <WizardShell
+    step={uiStep}
+    setStep={setUIStep}
+    canContinue={finalCanContinue}
+    onTryContinue={onTryContinue}
+    globalBlockingAlert={hasAnyBanned ? (
+      <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        This project contains banned words (e.g., ‘{(banned.title[0]?.term || banned.description[0]?.term || banned.instructions[0]?.term) ?? "-"}’). Remove them to continue.
+      </div>
+    ) : null}
+    isBlocked={hasAnyBanned}
+  >
       {uiStep === 0 && (
         <div className="space-y-6">
-          {attempted.has(0) && (!bannedTitle.ok || !bannedDesc.ok || basicsErrors) && (
+          {attempted.has(0) && basicsErrors && (
             <div className="rounded border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800">
-              { !bannedTitle.ok
-                ? "Banned words detected in title."
-                : (!bannedDesc.ok
-                  ? "Banned words detected in description."
-                  : ((basicsErrors as any)?.fieldErrors && (Object.values((basicsErrors as any).fieldErrors)[0] as any)?.[0])
-                ) }
+              {((basicsErrors as any)?.fieldErrors && (Object.values((basicsErrors as any).fieldErrors)[0] as any)?.[0]) || "Please fix the highlighted errors."}
             </div>
           )}
           <Card>
@@ -224,7 +245,9 @@ export default function CreateForm() {
               <div>
                 <label className="mb-1 block text-sm font-medium">Title</label>
                 <Input value={draft.title} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>patch({ title: e.target.value })} placeholder="e.g., Galactic Chef" maxLength={80} />
-                {!bannedTitle.ok && <p className="mt-1 text-xs text-red-600">Please remove banned words.</p>}
+                {banned.title.length > 0 && (
+                  <p className="mt-1 text-xs text-red-600">This field contains banned words (e.g., ‘{banned.title[0]!.term}’). Please remove them.</p>
+                )}
                 {basicsErrors?.fieldErrors?.title?.[0] && <p className="mt-1 text-xs text-red-600">{(basicsErrors.fieldErrors as any).title[0]}</p>}
                 {!!(draft.title?.trim()) && (
                   <p className="mt-1 text-xs text-neutral-500">URL: /game/{slugify(draft.title!)}</p>
@@ -246,7 +269,9 @@ export default function CreateForm() {
                 <label className="mb-1 block text-sm font-medium">One-sentence description</label>
                 <Input value={draft.description} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>patch({ description: e.target.value })} placeholder="Pitch your game in one sentence" />
                 <p className="mt-1 text-xs text-red-600">(max 20 words)</p>
-                {!bannedDesc.ok && <p className="mt-1 text-xs text-red-600">Please remove banned words.</p>}
+                {banned.description.length > 0 && (
+                  <p className="mt-1 text-xs text-red-600">This field contains banned words (e.g., ‘{banned.description[0]!.term}’). Please remove them.</p>
+                )}
                 {attempted.has(0) && basicsErrors?.fieldErrors?.description?.[0] && (
                   <p className="mt-1 text-xs text-red-600">{(basicsErrors.fieldErrors as any).description[0]}</p>
                 )}
@@ -254,6 +279,9 @@ export default function CreateForm() {
               <div>
                 <label className="mb-1 block text-sm font-medium">Instructions</label>
                 <Textarea value={draft.instructions || ""} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>)=>patch({ instructions: e.target.value })} placeholder="Explain how the game works." />
+                {banned.instructions.length > 0 && (
+                  <p className="mt-1 text-xs text-red-600">This field contains banned words (e.g., ‘{banned.instructions[0]!.term}’). Please remove them.</p>
+                )}
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Session length</label>
@@ -431,7 +459,7 @@ export default function CreateForm() {
               <div><span className="font-medium">Instructions:</span> {draft.instructions}</div>
             </div>
             <div className="mt-4">
-              <Button onClick={onPublish}>Publish</Button>
+              <Button onClick={onPublish} disabled={hasAnyBanned}>Publish</Button>
             </div>
           </Card>
         </div>

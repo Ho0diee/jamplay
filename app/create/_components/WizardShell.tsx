@@ -16,6 +16,8 @@ export default function WizardShell({
   canContinue,
   onTryContinue,
   onReset,
+  globalBlockingAlert,
+  isBlocked,
   children,
 }: {
   step: number
@@ -23,6 +25,8 @@ export default function WizardShell({
   canContinue: boolean
   onTryContinue?: () => void
   onReset?: () => void
+  globalBlockingAlert?: React.ReactNode
+  isBlocked?: boolean
   children: React.ReactNode
 }) {
   const goto = (idx: number) => {
@@ -59,6 +63,9 @@ export default function WizardShell({
         </nav>
       </div>
 
+      {globalBlockingAlert ? (
+        <div className="mb-4">{globalBlockingAlert}</div>
+      ) : null}
       <div className="space-y-6">{children}</div>
 
       <div className="fixed inset-x-0 bottom-0 z-10 border-t bg-white/80 backdrop-blur">
@@ -81,10 +88,10 @@ export default function WizardShell({
             {step < steps.length - 1 ? (
               <Button
                 size="md"
-                disabled={!canContinue}
+                disabled={!!isBlocked || !canContinue}
                 onClick={() => {
                   onTryContinue?.()
-                  if (canContinue) setStep(Math.min(steps.length - 1, step + 1))
+                  if (!isBlocked && canContinue) setStep(Math.min(steps.length - 1, step + 1))
                 }}
               >
                 Continue

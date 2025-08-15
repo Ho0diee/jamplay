@@ -1,6 +1,8 @@
-// Sitewide banned words list (seed baseline; expand later)
+// Canonical sitewide banned words list (seed baseline; expand later)
 // Prefer word-boundaries where possible; keep case-insensitive
 export const BANNED: (string | RegExp)[] = [
+  /\b(fuck|shit|bitch)\b/i, // baseline profanities
+  // existing safety terms
   /\bnsfw\b/i,
   /\bhate\b/i,
   /\bracist\b/i,
@@ -75,4 +77,27 @@ export function checkBanned(s: string): { ok: boolean; hits: string[] } {
     }
   }
   return { ok: hits.length === 0, hits }
+}
+
+// New canonical helpers used by Create UI for field-level feedback
+export type BannedHit = { term: string; index: number }
+
+export function findBanned(value: string): BannedHit[] {
+  const input = (value ?? "").toString()
+  if (!input) return []
+  const hits: BannedHit[] = []
+  for (const rule of getBannedList()) {
+    if (typeof rule === "string") {
+      const idx = input.toLowerCase().indexOf(rule.toLowerCase())
+      if (idx !== -1) hits.push({ term: rule, index: idx })
+    } else {
+      const m = input.match(rule)
+      if (m) hits.push({ term: m[0], index: m.index ?? 0 })
+    }
+  }
+  return hits
+}
+
+export function hasBanned(value: string): boolean {
+  return findBanned(value).length > 0
 }
