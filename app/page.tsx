@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input"
 import { boostedTrendingScore, trendingScore } from "@/lib/rankers"
 import { games as DEMO, type Game as DemoGame } from "@/lib/demo-data"
 import { dedupeBySlug } from "@/lib/filters"
+import { filterByCategory, normalizeTagSlug } from "@/lib/filters"
 import SortSelect, { type SortValue } from "@/components/SortSelect"
 import { getCatalog } from "@/lib/catalog"
 import { slugify } from "@/lib/slug"
 import GameCard from "@/components/GameCard"
 import { getLocalLikes } from "@/lib/likes"
+import { CategoryPills } from "@/components/CategoryPills"
 
 function byTrending(a: any, b: any) {
   return trendingScore(b) - trendingScore(a)
@@ -28,7 +30,7 @@ export default function DiscoverPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [q, setQ] = useState<string>(() => searchParams.get("q") || "")
-  const selectedCategory = null as string | null
+  const selectedCategory = (searchParams.get("category") as string | null)
   const sort = ((searchParams.get("sort") as SortValue) || "trending") as SortValue
 
   // Server-safe initial catalog (demo only); merge locals after mount to avoid hydration mismatch
@@ -50,7 +52,7 @@ export default function DiscoverPage() {
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase()
-  const byCategory = catalog as any
+    const byCategory = filterByCategory(catalog as any, selectedCategory)
     const bySearch = !needle
       ? byCategory
       : byCategory.filter((g: any) =>
@@ -74,8 +76,17 @@ export default function DiscoverPage() {
   const newRising = useMemo(() => [...filtered].sort(byNewAndRising).slice(0, 6), [filtered])
   const editors = useMemo(() => filtered.filter((g: any) => g.editorsPick).slice(0, 6), [filtered])
 
-  // Build category list from all games (not filtered by search), sorted by count desc
-  const categories: string[] = []
+  // Build category list from all games (not filtered by search)
+  const categories: string[] = useMemo(() => {
+    const set = new Set<string>()
+    for (const g of catalog as any[]) {
+      for (const t of (g?.tags ?? []) as string[]) {
+        const s = normalizeTagSlug(t)
+        if (s) set.add(s)
+      }
+    }
+    return Array.from(set.values())
+  }, [catalog])
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -103,7 +114,15 @@ export default function DiscoverPage() {
       </section>
 
       {/* Categories pills */}
-  {/* Category pills removed as tags/categories are no longer used */}
+      <CategoryPills
+        categories={categories}
+        selected={selectedCategory}
+        onSelect={(slug) => {
+          const params = new URLSearchParams(searchParams.toString())
+          if (slug) params.set("category", slug); else params.delete("category")
+          router.push(params.size ? `/?${params.toString()}` : "/")
+        }}
+      />
 
       {selectedCategory || (q && q.trim().length > 0) ? (
         <section className="space-y-3">
@@ -121,7 +140,7 @@ export default function DiscoverPage() {
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {applySort(filtered as any, sort, likesTick).map((g: any) => (
-              <GameCard key={(g as any).slug} game={g as any} onClick={() => router.push(`/game/${(g as any).slug}`)} />
+              <GameCard key={(g as any).slug} game={g as any} />
             ))}
           </div>
         </section>
@@ -136,7 +155,7 @@ export default function DiscoverPage() {
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {editors.map((g: any) => (
-                <GameCard key={(g as any).slug} game={g as any} onClick={() => router.push(`/game/${(g as any).slug}`)} />
+                <GameCard key={(g as any).slug} game={g as any} />
               ))}
             </div>
           </section>

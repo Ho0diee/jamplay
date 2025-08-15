@@ -19,8 +19,7 @@ export default function CreateForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const originalSlugRef = React.useRef<string | null>(null);
-  // logical steps: 0 basics, 1 media, 2 gameplay, 3 build, 4 safety, 5 review
-  // new logical steps: 0 basics, 1 media, 2 build, 3 safety, 4 review (gameplay & community removed)
+  // logical steps: 0 basics, 1 media, 2 build, 3 safety, 4 review (gameplay & community removed)
   const [lstep, setLStep] = React.useState(0);
   const [attempted, setAttempted] = React.useState<Set<number>>(new Set());
   const [draft, setDraft] = React.useState<CreateDraft>({
@@ -193,19 +192,10 @@ export default function CreateForm() {
   const bannedTitle = checkBanned(draft.title || "");
   const bannedDesc = checkBanned(draft.description || "");
 
-  // Map logical to UI steps, skipping Gameplay (2) and Community (4) in the shell.
-  // UI steps (WizardShell): 0 basics, 1 media, 2 gameplay, 3 build, 4 community, 5 safety, 6 review
-  // Logical steps:          0 basics, 1 media,            2 build,             3 safety, 4 review
-  const uiStep = lstep === 0 ? 0 : lstep === 1 ? 1 : lstep === 2 ? 3 : lstep === 3 ? 5 : 6
-  const setUIStep = (idx: number) => {
-    // Route gameplay (2) to build (logical 2), community (4) to safety (logical 3)
-    if (idx === 0) return setLStep(0)
-    if (idx === 1) return setLStep(1)
-    if (idx === 2 || idx === 3) return setLStep(2)
-    if (idx === 4 || idx === 5) return setLStep(3)
-    return setLStep(4)
-  }
-  const finalCanContinue = (uiStep === 6 ? false : logicalValid) && !(lstep === 0 && (!bannedTitle.ok || !bannedDesc.ok));
+  // UI steps now match shell directly: 0 basics, 1 media, 2 build, 3 safety, 4 review
+  const uiStep = lstep
+  const setUIStep = (idx: number) => setLStep(Math.max(0, Math.min(4, idx)))
+  const finalCanContinue = (uiStep === 4 ? false : logicalValid) && !(lstep === 0 && (!bannedTitle.ok || !bannedDesc.ok))
 
   const onTryContinue = React.useCallback(() => {
     setAttempted((prev: Set<number>) => new Set([...prev, lstep]))
@@ -241,17 +231,31 @@ export default function CreateForm() {
               <div>
                 <label className="mb-1 block text-sm font-medium">Category</label>
                 <Select value={draft.category} onValueChange={(v: string)=>patch({ category: v })} placeholder="Select category">
-                  {["Adventure","RPG","Puzzle","Horror","Sci-Fi","Romance"].map((c)=> (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
+                    <SelectItem value="Adventure">Adventure</SelectItem>
+                    <SelectItem value="RPG">RPG</SelectItem>
+                    <SelectItem value="Puzzle">Puzzle</SelectItem>
+                    <SelectItem value="Horror">Horror</SelectItem>
+                    <SelectItem value="Sci-Fi">Sci-Fi</SelectItem>
+                    <SelectItem value="Romance">Romance</SelectItem>
                 </Select>
                 {basicsErrors?.fieldErrors?.category?.[0] && <p className="mt-1 text-xs text-red-600">{(basicsErrors.fieldErrors as any).category[0]}</p>}
               </div>
               <div>
-    <label className="mb-1 block text-sm font-medium">One-sentence description (max 20 words)</label>
+                <label className="mb-1 block text-sm font-medium">One-sentence description</label>
                 <Input value={draft.description} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>patch({ description: e.target.value })} placeholder="Pitch your game in one sentence" />
-    {!bannedDesc.ok && <p className="mt-1 text-xs text-red-600">Please remove banned words.</p>}
-    {basicsErrors?.fieldErrors?.description?.[0] && <p className="mt-1 text-xs text-red-600">{(basicsErrors.fieldErrors as any).description[0]}</p>}
+                <p className="mt-1 text-xs text-red-600">(max 20 words)</p>
+                {!bannedDesc.ok && <p className="mt-1 text-xs text-red-600">Please remove banned words.</p>}
+                {attempted.has(0) && basicsErrors?.fieldErrors?.description?.[0] && (
+                  <p className="mt-1 text-xs text-red-600">{(basicsErrors.fieldErrors as any).description[0]}</p>
+                )}
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Instructions</label>
+                <Textarea value={draft.instructions || ""} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>)=>patch({ instructions: e.target.value })} placeholder="Explain how the game works." />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium">Session length</label>
+                <Input value={draft.sessionLength || ""} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>patch({ sessionLength: e.target.value })} placeholder="e.g., 10-20" />
               </div>
             </div>
           </Card>
@@ -277,6 +281,9 @@ export default function CreateForm() {
               {!coverFile && draft.cover && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={draft.cover} alt="Cover preview" className="h-auto w-[480px] rounded border object-cover" />
+              )}
+              {attempted.has(1) && mediaErrors?.fieldErrors?.cover?.[0] && (
+                <p className="text-xs text-red-600">{(mediaErrors.fieldErrors as any).cover[0]}</p>
               )}
             </div>
           </Card>
@@ -327,31 +334,16 @@ export default function CreateForm() {
           </Card>
         </div>
       )}
-  {uiStep === 3 && (
+  {uiStep === 2 && (
         <div className="space-y-6">
           {attempted.has(2) && buildErrors && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">Please fix the highlighted errors.</div>
           )}
           <StepBuild value={draft} onChange={patch} errors={buildErrors as any} />
-          <Card>
-            <CardTitle>Instructions</CardTitle>
-            <CardDescription>Explain how to play. Keep it concise.</CardDescription>
-            <div className="mt-4 space-y-3">
-              <Textarea value={draft.instructions || ""} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>)=>patch({ instructions: e.target.value })} placeholder="Explain how the game works." />
-              {buildErrors?.fieldErrors?.instructions?.[0] && <p className="mt-1 text-xs text-red-600">{(buildErrors.fieldErrors as any).instructions[0]}</p>}
-            </div>
-          </Card>
-          <Card>
-            <CardTitle>Session length</CardTitle>
-            <CardDescription>Use minutes (1–300) or a range like 10-20.</CardDescription>
-            <div className="mt-4">
-              <Input value={draft.sessionLength || ""} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>patch({ sessionLength: e.target.value })} placeholder="e.g., 10-20" />
-              {buildErrors?.fieldErrors?.sessionLength?.[0] && <p className="mt-1 text-xs text-red-600">{(buildErrors.fieldErrors as any).sessionLength[0]}</p>}
-            </div>
-          </Card>
+          {/* Build-specific inputs remain in StepBuild; Instructions and Session length moved to Basics UI */}
         </div>
       )}
-      {uiStep === 5 && (
+      {uiStep === 3 && (
         <div className="space-y-6">
           {attempted.has(3) && safetyErrors && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">Please fix the highlighted errors.</div>
@@ -385,7 +377,7 @@ export default function CreateForm() {
           </Card>
         </div>
       )}
-      {uiStep === 6 && (
+  {uiStep === 4 && (
         <div className="space-y-6">
           <Card>
             <CardTitle>Review</CardTitle>
@@ -402,6 +394,6 @@ export default function CreateForm() {
           </Card>
         </div>
       )}
-    </WizardShell>
+  </WizardShell>
   );
 }

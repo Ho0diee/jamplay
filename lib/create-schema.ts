@@ -9,7 +9,11 @@ const BasicsCore = z.object({
   title: z.string().trim().min(4, "Min 4 characters").max(80, "Max 80 characters"),
   // tagline removed; tags removed
   category: z.string().min(1, "Category is required"),
-  description: z.string().trim().refine((s: string) => isOneSentenceMaxWords(s, 20), { message: "One sentence, max 20 words" }),
+  description: z
+    .string()
+    .trim()
+    .min(30, "Min 30 characters")
+    .refine((s: string) => isOneSentenceMaxWords(s, 20), { message: "One sentence, max 20 words" }),
   // slug is auto, readonly preview; still validate shape locally for safety
   slug: z.string().transform((s: string) => slugify(s)).superRefine((val: string, ctx: RefinementCtx) => {
     const fmt = validateSlugFormat(val)
@@ -137,15 +141,7 @@ export const BuildSchema = z.object({
   return !!v.playUrlOrTemplateId && v.playUrlOrTemplateId.trim().length > 0
 }, { path: ["playUrlOrTemplateId"], message: "Required" })
 
-// Step 5: Community
-export const CommunitySchema = z.object({
-  // creator/monetization hidden for now; allow optional links if present in UI
-  links: z.object({
-    site: z.string().url().optional(),
-    discord: z.string().url().optional(),
-    x: z.string().url().optional(),
-  }).optional(),
-})
+// Community removed
 
 // Step 6: Safety & Rights
 export const SafetySchema = z.object({

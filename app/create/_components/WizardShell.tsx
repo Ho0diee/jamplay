@@ -5,9 +5,7 @@ import { Button } from "@/components/ui/button"
 const steps: { key: string; label: string; enabled: boolean }[] = [
   { key: "basics", label: "Basics", enabled: true },
   { key: "media", label: "Media", enabled: true },
-  { key: "gameplay", label: "Gameplay", enabled: true },
   { key: "build", label: "Build", enabled: true },
-  { key: "community", label: "Community", enabled: true },
   { key: "safety", label: "Safety", enabled: true },
   { key: "review", label: "Review", enabled: true },
 ]
@@ -80,16 +78,18 @@ export default function WizardShell({
             >
               Back
             </Button>
-            <Button
-              size="md"
-              disabled={!canContinue}
-              onClick={() => {
-                onTryContinue?.()
-                if (canContinue) setStep(Math.min(6, step + 1))
-              }}
-            >
-              Continue
-            </Button>
+            {step < steps.length - 1 ? (
+              <Button
+                size="md"
+                disabled={!canContinue}
+                onClick={() => {
+                  onTryContinue?.()
+                  if (canContinue) setStep(Math.min(steps.length - 1, step + 1))
+                }}
+              >
+                Continue
+              </Button>
+            ) : null}
           </div>
         </div>
       </div>

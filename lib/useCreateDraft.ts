@@ -16,6 +16,8 @@ export function useCreateDraft() {
   const migrated: any = { ...(parsed || {}) }
   // Remove legacy/unused fields
   delete migrated.controls
+  delete migrated.community
+  if (migrated.links) delete migrated.links
   // Ensure slug is present and coherent with title for schema validation
   if (!migrated.slug) migrated.slug = slugify(migrated.title ?? "")
   // Default sensible values
