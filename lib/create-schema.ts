@@ -1,6 +1,5 @@
 import { z, type RefinementCtx } from "zod"
 import { slugify, validateSlugFormat } from "@/lib/slug"
-import { dedupeTags, normalizeTag } from "@/lib/tags"
 import { isYouTubeUrl } from "@/lib/youtube"
 import { games as DEMO } from "@/lib/demo-data"
 
@@ -8,11 +7,8 @@ export const visibilityEnum = z.enum(["draft", "unlisted", "public"])
 
 const BasicsCore = z.object({
   title: z.string().trim().min(4, "Min 4 characters").max(80, "Max 80 characters"),
-  // tagline removed
+  // tagline removed; tags removed
   category: z.string().min(1, "Category is required"),
-  tags: z.array(z.string()).max(10).optional()
-    .transform((arr: string[] | undefined) => dedupeTags(arr ?? []))
-    .refine((arr: string[]) => (arr ?? []).every((t: string) => t.length <= 20), { message: "Each tag ≤ 20 chars", path: ["tags"] }),
   // slug is auto, readonly preview; still validate shape locally for safety
   slug: z.string().transform((s: string) => slugify(s)).superRefine((val: string, ctx: RefinementCtx) => {
     const fmt = validateSlugFormat(val)
@@ -61,6 +57,7 @@ export const CreateDraftSchema = BasicsCore
   .merge(MediaSchema.partial())
   .merge(z.object({
     description: z.string().optional(),
+    instructions: z.string().optional(),
     controls: z.string().optional(),
     sessionLength: z.string().optional(),
   }))
@@ -69,13 +66,6 @@ export const CreateDraftSchema = BasicsCore
     playUrlOrTemplateId: z.string().optional(),
     version: z.string().optional(),
     changelog: z.string().optional(),
-  }))
-  .merge(z.object({
-    links: z.object({
-      site: z.string().url().optional(),
-      discord: z.string().url().optional(),
-      x: z.string().url().optional(),
-    }).optional(),
   }))
   .merge(z.object({
     rightsConfirmed: z.boolean().optional(),
@@ -87,7 +77,8 @@ export type CreateDraft = z.infer<typeof CreateDraftSchema>
 
 // Step 3: Gameplay
 export const GameplaySchema = z.object({
-  description: z.string().trim().min(30, "Min 30 characters").max(2000, "Max ~2000 characters"),
+  description: z.string().trim().refine((s: string) => isOneSentence22Words(s), { message: "One sentence, max 22 words" }),
+  instructions: z.string().trim().min(1, "Instructions are required"),
   // Presets + optional custom lines handled in UI; store as string for now
   controls: z.string().optional(),
   sessionLength: z.string().min(1, "Session length is required").transform((v: string, ctx: RefinementCtx) => {
@@ -123,6 +114,17 @@ export function parseSessionLength(input: string): { type: "single"; minutes: nu
   return null;
 }
 
+// Helpers
+export function isOneSentence22Words(s: string): boolean {
+  const text = (s ?? "").trim()
+  if (!text) return false
+  // Must be a single sentence: allow one terminal punctuation .!? at end
+  const sentenceBreaks = text.match(/[\.\!\?]/g) ?? []
+  if (sentenceBreaks.length > 1) return false
+  // Count words
+  const words = text.split(/\s+/).filter(Boolean)
+  return words.length > 0 && words.length <= 22
+}
 // Step 4: Build & Access
 export const BuildSchema = z.object({
   launchType: z.enum(["external", "embedded_template", "api_endpoint"]),

@@ -33,7 +33,7 @@ export default function StepBasics({
   onChange: (patch: Partial<Draft>) => void
   errors?: { fieldErrors?: Record<string, string[]> }
 }) {
-  const [tagInput, setTagInput] = React.useState("")
+  // Tags removed
 
   const fieldError = (name: string) => {
     // errors from zod flatten have shape { fieldErrors: { name: string[] } }
@@ -49,8 +49,8 @@ export default function StepBasics({
         </div>
       )}
       <Card>
-        <CardTitle>Basics</CardTitle>
-        <CardDescription>Tell us the essentials about your game.</CardDescription>
+  <CardTitle>Basics</CardTitle>
+  <CardDescription>Tell us the essentials about your game.</CardDescription>
         <div className="mt-4 space-y-4">
           <div>
             <label className="mb-1 block text-sm font-medium">Title</label>
@@ -80,40 +80,7 @@ export default function StepBasics({
             {fieldError("category") && <p className="mt-1 text-xs text-red-600">{fieldError("category")}</p>}
           </div>
 
-          <div>
-            <label className="mb-1 block text-sm font-medium">Tags</label>
-            <div className="flex gap-2">
-              <Input
-                value={tagInput}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && tagInput.trim()) {
-                    e.preventDefault()
-                    const next = Array.from(new Set([...(value.tags ?? []), slugify(tagInput).slice(0, 20)]))
-                    onChange({ tags: next })
-                    setTagInput("")
-                  }
-                }}
-                placeholder="Add a tag and press Enter"
-              />
-            </div>
-            {!!(value.tags?.length) && (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {value.tags!.map((t) => (
-                  <span key={t} className="rounded border px-2 py-0.5 text-xs">
-                    {t}
-                    <button
-                      className="ml-1 text-neutral-500 hover:text-black"
-                      onClick={() => onChange({ tags: (value.tags ?? []).filter((x) => x !== t) })}
-                      aria-label={`Remove ${t}`}
-                    >
-                      ×
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Tags removed */}
 
           <div>
             <label className="mb-1 block text-sm font-medium">Visibility</label>

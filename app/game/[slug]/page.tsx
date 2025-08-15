@@ -1,3 +1,4 @@
+import { sanitizeForDisplay } from "@/lib/sanitize"
 function titleCaseFromSlug(slug: string) {
   return slug
     .split("-")
@@ -10,8 +11,8 @@ export default async function GamePage({ params }: { params: { slug: string } })
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">{title}</h1>
-        <p className="text-neutral-600">Coming soon. This game page will be playable once published.</p>
+  <h1 className="text-2xl font-semibold">{sanitizeForDisplay(title)}</h1>
+  <p className="text-neutral-600">{sanitizeForDisplay("Coming soon. This game page will be playable once published.")}</p>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
