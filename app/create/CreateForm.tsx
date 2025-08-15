@@ -29,7 +29,7 @@ export default function CreateForm() {
     trailerUrl: "",
     description: "",
     instructions: "",
-    sessionLength: "",
+  sessionLength: undefined,
   launchType: undefined,
   playUrl: "",
   templateId: "",
@@ -73,13 +73,18 @@ export default function CreateForm() {
         trailerUrl: item.trailer || "",
         description: item.description || "",
         instructions: item.instructions || "",
-        sessionLength: typeof item.sessionLength === "string"
-          ? item.sessionLength
-          : item.sessionLength?.type === "single"
-          ? String(item.sessionLength.minutes)
-          : item.sessionLength?.type === "range"
-          ? `${item.sessionLength.min}-${item.sessionLength.max}`
-          : "",
+        // Normalize legacy sessionLength to minutes (number) when possible
+        sessionLength: ((): number | undefined => {
+          const raw = item.sessionLength
+          if (typeof raw === "number") return raw
+          if (typeof raw === "string") {
+            const s = raw.trim()
+            if (/^\d+$/.test(s)) return parseInt(s, 10)
+            return undefined
+          }
+          if (raw && typeof raw === "object" && raw.type === "single") return Number(raw.minutes)
+          return undefined
+        })(),
   launchType: item.launchType || undefined,
   playUrl: item.launchType === "external" ? (item.playUrl ?? item.playUrlOrTemplateId ?? "") : "",
   templateId: item.launchType === "embedded_template" ? (item.templateId ?? item.playUrlOrTemplateId ?? "") : "",
@@ -159,7 +164,7 @@ export default function CreateForm() {
         title: (draft.title || "").trim(),
         description: (draft.description || "").trim(),
         instructions: (draft.instructions || "").trim(),
-        sessionLength: draft.sessionLength || "",
+  sessionLength: typeof draft.sessionLength === "number" ? draft.sessionLength : undefined,
         category: draft.category || undefined,
         cover: draft.cover || "/logo.svg",
         gallery: draft.gallery,
@@ -268,7 +273,7 @@ export default function CreateForm() {
               <div>
                 <label className="mb-1 block text-sm font-medium">One-sentence description</label>
                 <Input value={draft.description} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>patch({ description: e.target.value })} placeholder="Pitch your game in one sentence" />
-                <p className="mt-1 text-xs text-red-600">(max 20 words)</p>
+                <p className="mt-1 text-xs text-red-600">(max 15 words)</p>
                 {banned.description.length > 0 && (
                   <p className="mt-1 text-xs text-red-600">This field contains banned words (e.g., ‘{banned.description[0]!.term}’). Please remove them.</p>
                 )}
@@ -285,7 +290,15 @@ export default function CreateForm() {
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium">Session length</label>
-                <Input value={draft.sessionLength || ""} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>patch({ sessionLength: e.target.value })} placeholder="e.g., 10-20" />
+                <Select
+                  value={typeof draft.sessionLength === "number" ? String(draft.sessionLength) : undefined}
+                  onValueChange={(v: string)=>patch({ sessionLength: Number(v) })}
+                  placeholder="Select length"
+                >
+                  {[5,10,15,20,30,45,60,90,120].map(m => (
+                    <SelectItem key={m} value={String(m)}>{m} minutes</SelectItem>
+                  ))}
+                </Select>
               </div>
             </div>
           </Card>

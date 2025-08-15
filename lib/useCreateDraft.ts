@@ -18,6 +18,17 @@ export function useCreateDraft() {
   delete migrated.controls
   delete migrated.community
   if (migrated.links) delete migrated.links
+  // Normalize legacy sessionLength (string/range) to number or unset
+  if (typeof migrated.sessionLength === "string") {
+    const s = migrated.sessionLength.trim()
+    if (/^\d+$/.test(s)) {
+      const n = parseInt(s, 10)
+      const allowed = [5,10,15,20,30,45,60,90,120]
+      migrated.sessionLength = allowed.includes(n) ? n : undefined
+    } else {
+      delete migrated.sessionLength
+    }
+  }
   // Ensure slug is present and coherent with title for schema validation
   if (!migrated.slug) migrated.slug = slugify(migrated.title ?? "")
   // Default sensible values

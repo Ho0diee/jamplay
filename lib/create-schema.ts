@@ -13,7 +13,7 @@ const BasicsCore = z.object({
     .string()
     .trim()
     .min(30, "Min 30 characters")
-    .refine((s: string) => isOneSentenceMaxWords(s, 20), { message: "One sentence, max 20 words" }),
+  .refine((s: string) => isOneSentenceMaxWords(s, 15), { message: "One sentence, max 15 words" }),
   // slug is auto, readonly preview; still validate shape locally for safety
   slug: z.string().transform((s: string) => slugify(s)).superRefine((val: string, ctx: RefinementCtx) => {
     const fmt = validateSlugFormat(val)
@@ -61,8 +61,13 @@ export const MediaSchema = z.object({
 export const CreateDraftSchema = BasicsCore
   .merge(MediaSchema.partial())
   .merge(z.object({
-  instructions: z.string().optional(),
-    sessionLength: z.string().optional(),
+    instructions: z.string().optional(),
+    sessionLength: z
+      .number()
+      .int()
+      .min(1)
+  .refine((v: number) => [5, 10, 15, 20, 30, 45, 60, 90, 120].includes(v), { message: "Choose a valid length" })
+      .optional(),
   }))
   .merge(z.object({
   launchType: z.enum(["external", "embedded_template", "api_endpoint"]).optional(),
@@ -133,27 +138,7 @@ export const BuildSchema = z
     playUrlOrTemplateId: z.string().optional(),
     version: z.string().regex(/^\d+$/, "Version must be an integer").transform((s: string) => s || "1"),
     changelog: z.string().max(200).optional(),
-    instructions: z.string().trim().optional(),
-    sessionLength: z
-      .string()
-      .optional()
-      .transform((v: string | undefined, ctx: RefinementCtx) => {
-        const raw = (v ?? "").trim()
-        if (!raw) return undefined
-        if (/^\d+$/.test(raw)) {
-          const m = parseInt(raw, 10)
-          if (m >= 1 && m <= 300) return { type: "single" as const, minutes: m }
-        } else {
-          const m = raw.match(/^(\d+)-(\d+)$/)
-          if (m) {
-            const min = parseInt(m[1], 10)
-            const max = parseInt(m[2], 10)
-            if (min >= 1 && max <= 300 && min < max) return { type: "range" as const, min, max }
-          }
-        }
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Use minutes (1–300) or m-n range", path: ["sessionLength"] })
-        return z.NEVER
-      }),
+  instructions: z.string().trim().optional(),
   })
   .superRefine((v: any, ctx: RefinementCtx) => {
     const urlCandidate: string | undefined = v.playUrl ?? v.playUrlOrTemplateId
