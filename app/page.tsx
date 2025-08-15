@@ -147,7 +147,7 @@ export default function DiscoverPage() {
       ) : (
         <>
           <Section title="Trending now" items={trending} seeAllHref="/trending" />
-          <Section title="New & Rising" items={newRising} />
+          <Section title="New & Rising" items={newRising} seeAllHref="/new" />
           <section className="space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-medium">Editor’s Picks</h2>

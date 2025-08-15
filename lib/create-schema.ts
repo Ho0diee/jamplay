@@ -65,8 +65,9 @@ export const CreateDraftSchema = BasicsCore
     sessionLength: z.string().optional(),
   }))
   .merge(z.object({
-    launchType: z.enum(["external", "embedded_template", "api_endpoint"]).optional(),
-    playUrlOrTemplateId: z.string().optional(),
+  launchType: z.enum(["external", "embedded_template", "api_endpoint"]).optional(),
+  playUrl: z.string().optional(),
+  templateId: z.string().optional(),
     version: z.string().optional(),
     changelog: z.string().optional(),
   }))
@@ -111,35 +112,53 @@ export function isOneSentenceMaxWords(s: string, maxWords: number): boolean {
   return words.length > 0 && words.length <= Math.max(1, maxWords)
 }
 // Step 4: Build & Access
-export const BuildSchema = z.object({
-  launchType: z.enum(["external", "embedded_template", "api_endpoint"]),
-  playUrlOrTemplateId: z.string().min(1, "Required").optional(),
-  version: z.string().regex(/^\d+$/, "Version must be an integer").transform((s: string) => s || "1"),
-  changelog: z.string().max(200).optional(),
-  instructions: z.string().trim().min(1, "Instructions are required"),
-  sessionLength: z.string().min(1, "Session length is required").transform((v: string, ctx: RefinementCtx) => {
-    const s = (v ?? "").trim()
-    if (/^\d+$/.test(s)) {
-      const m = parseInt(s, 10)
-      if (m >= 1 && m <= 300) return { type: "single" as const, minutes: m }
-    } else {
-      const m = s.match(/^(\d+)-(\d+)$/)
-      if (m) {
-        const min = parseInt(m[1], 10)
-        const max = parseInt(m[2], 10)
-        if (min >= 1 && max <= 300 && min < max) return { type: "range" as const, min, max }
+export const BuildSchema = z
+  .object({
+    launchType: z.enum(["external", "embedded_template", "api_endpoint"]),
+    playUrl: z
+      .string()
+      .url("Enter a valid URL")
+      .refine((u: string) => u.startsWith("https://"), "Use a valid https URL")
+      .optional(),
+    templateId: z
+      .string()
+      .regex(/^TMP-[A-Z0-9]{5,10}$/, "Template ID format TMP-XXXXX")
+      .optional(),
+    version: z.string().regex(/^\d+$/, "Version must be an integer").transform((s: string) => s || "1"),
+    changelog: z.string().max(200).optional(),
+    instructions: z.string().trim().min(1, "Instructions are required"),
+    sessionLength: z
+      .string()
+      .min(1, "Session length is required")
+      .transform((v: string, ctx: RefinementCtx) => {
+        const s = (v ?? "").trim()
+        if (/^\d+$/.test(s)) {
+          const m = parseInt(s, 10)
+          if (m >= 1 && m <= 300) return { type: "single" as const, minutes: m }
+        } else {
+          const m = s.match(/^(\d+)-(\d+)$/)
+          if (m) {
+            const min = parseInt(m[1], 10)
+            const max = parseInt(m[2], 10)
+            if (min >= 1 && max <= 300 && min < max) return { type: "range" as const, min, max }
+          }
+        }
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Use minutes (1–300) or m-n range", path: ["sessionLength"] })
+        return z.NEVER
+      }),
+  })
+  .superRefine((v: any, ctx: RefinementCtx) => {
+    if (v.launchType === "external") {
+      if (!v.playUrl) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Required", path: ["playUrl"] })
       }
     }
-    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Use minutes (1–300) or m-n range", path: ["sessionLength"] })
-    return z.NEVER
-  }),
-}).refine((v: { launchType?: string; playUrlOrTemplateId?: string }) => {
-  // Require playUrlOrTemplateId when launchType is any of the allowed options
-  if (!v.launchType) return false
-  if (v.launchType === "external") return /^https?:\/\//i.test(v.playUrlOrTemplateId ?? "")
-  if (v.launchType === "embedded_template") return /^TMP-[A-Z0-9]{5,10}$/.test(v.playUrlOrTemplateId ?? "")
-  return !!v.playUrlOrTemplateId && v.playUrlOrTemplateId.trim().length > 0
-}, { path: ["playUrlOrTemplateId"], message: "Required" })
+    if (v.launchType === "embedded_template") {
+      if (!v.templateId) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Required", path: ["templateId"] })
+      }
+    }
+  })
 
 // Community removed
 

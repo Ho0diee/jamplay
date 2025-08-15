@@ -3,7 +3,6 @@ import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import WizardShell from "./_components/WizardShell";
 // Inline Basics and Review to meet new spec without touching other components
-import StepBuild from "./_components/StepBuild";
 // Safety is inlined here to control banner gating
 import { BasicsSchema, MediaSchema, BuildSchema, SafetySchema, type CreateDraft } from "@/lib/create-schema";
 import { slugify } from "@/lib/slug";
@@ -31,8 +30,9 @@ export default function CreateForm() {
     description: "",
     instructions: "",
     sessionLength: "",
-    launchType: undefined,
-    playUrlOrTemplateId: "",
+  launchType: undefined,
+  playUrl: "",
+  templateId: "",
     version: "1",
     changelog: "",
     rightsConfirmed: false,
@@ -74,8 +74,9 @@ export default function CreateForm() {
           : item.sessionLength?.type === "range"
           ? `${item.sessionLength.min}-${item.sessionLength.max}`
           : "",
-        launchType: item.launchType || undefined,
-        playUrlOrTemplateId: item.playUrlOrTemplateId || "",
+  launchType: item.launchType || undefined,
+  playUrl: item.launchType === "external" ? (item.playUrl ?? item.playUrlOrTemplateId ?? "") : "",
+  templateId: item.launchType === "embedded_template" ? (item.templateId ?? item.playUrlOrTemplateId ?? "") : "",
         rightsConfirmed: !!item.rightsConfirmed,
         policyConfirmed: !!item.policyConfirmed,
         ageGuidance: item.ageGuidance || undefined,
@@ -102,11 +103,12 @@ export default function CreateForm() {
 
   const buildRes = React.useMemo(() => BuildSchema.safeParse({
     launchType: draft.launchType,
-    playUrlOrTemplateId: draft.playUrlOrTemplateId,
+    playUrl: draft.playUrl,
+    templateId: draft.templateId,
     version: draft.version || "1",
-  instructions: draft.instructions,
-  sessionLength: draft.sessionLength,
-  }), [draft.launchType, draft.playUrlOrTemplateId, draft.version, draft.instructions, draft.sessionLength]);
+    instructions: draft.instructions,
+    sessionLength: draft.sessionLength,
+  }), [draft.launchType, draft.playUrl, draft.templateId, draft.version, draft.instructions, draft.sessionLength]);
 
   const safetyRes = React.useMemo(() => SafetySchema.safeParse({
     rightsConfirmed: !!draft.rightsConfirmed,
@@ -156,7 +158,7 @@ export default function CreateForm() {
         gallery: draft.gallery,
         trailer: draft.trailerUrl || undefined,
         launchType: draft.launchType,
-        playUrlOrTemplateId: draft.playUrlOrTemplateId,
+  playUrlOrTemplateId: draft.launchType === "external" ? draft.playUrl : draft.launchType === "embedded_template" ? draft.templateId : "",
         publishedAt: nowIso,
         updatedAt: nowIso,
         plays48h: 0,
@@ -339,8 +341,48 @@ export default function CreateForm() {
           {attempted.has(2) && buildErrors && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">Please fix the highlighted errors.</div>
           )}
-          <StepBuild value={draft} onChange={patch} errors={buildErrors as any} />
-          {/* Build-specific inputs remain in StepBuild; Instructions and Session length moved to Basics UI */}
+          <Card>
+            <CardTitle>Build & Access</CardTitle>
+            <CardDescription>How players start the game and what’s new.</CardDescription>
+            <div className="mt-4 space-y-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium">Launch type</label>
+                <Select value={draft.launchType as string | undefined} onValueChange={(v) => patch({ launchType: v as any })}>
+                  {[{value:"external",label:"External URL"},{value:"embedded_template",label:"Embedded Template"},{value:"api_endpoint",label:"API Endpoint"}].map(o => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </Select>
+              </div>
+
+              {draft.launchType === "external" && (
+                <div>
+                  <label htmlFor="playUrl" className="mb-1 block text-sm font-medium">Play URL</label>
+                  <Input id="playUrl" name="playUrl" value={draft.playUrl ?? ""} onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ playUrl: e.target.value })} placeholder="https://example.com/play" />
+                  {buildErrors?.fieldErrors?.playUrl?.[0] && <p className="mt-1 text-xs text-red-600">{(buildErrors.fieldErrors as any).playUrl[0]}</p>}
+                </div>
+              )}
+
+              {draft.launchType === "embedded_template" && (
+                <div>
+                  <label htmlFor="templateId" className="mb-1 block text-sm font-medium">Template ID</label>
+                  <Input id="templateId" name="templateId" value={draft.templateId ?? ""} onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ templateId: e.target.value })} placeholder="TMP-9X3QF7" />
+                  {buildErrors?.fieldErrors?.templateId?.[0] && <p className="mt-1 text-xs text-red-600">{(buildErrors.fieldErrors as any).templateId[0]}</p>}
+                </div>
+              )}
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Version</label>
+                  <Input value={draft.version ?? ""} onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ version: e.target.value })} placeholder="1" />
+                  {buildErrors?.fieldErrors?.version?.[0] && <p className="mt-1 text-xs text-red-600">{(buildErrors.fieldErrors as any).version[0]}</p>}
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">Changelog</label>
+                  <Input value={draft.changelog ?? ""} onChange={(e: React.ChangeEvent<HTMLInputElement>) => patch({ changelog: e.target.value })} placeholder="Short update notes" />
+                </div>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
       {uiStep === 3 && (

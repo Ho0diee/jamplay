@@ -32,3 +32,10 @@ export function getCatalog(): CatalogGame[] {
 }
 
 // slugify is re-exported from lib/slug
+
+export function visibleTags(g: any): string[] {
+  const tags = Array.isArray(g?.tags) ? (g.tags as string[]).filter((s) => typeof s === "string" && s.trim().length > 0) : []
+  if (tags.length > 0) return tags
+  const cat = (g?.category ?? "").toString().trim()
+  return cat ? [cat] : []
+}
