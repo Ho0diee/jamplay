@@ -1,4 +1,3 @@
-import * as React from "react"
 import { getCatalog } from "@/lib/catalog"
 import GameCard from "@/components/GameCard"
 
@@ -14,9 +13,9 @@ export default function EditorsPicksPage() {
         {items.map((g: any) => {
           const k = (g as any).slug ?? (g as any).id ?? g.title
           return (
-            <React.Fragment key={k}>
+            <div key={k}>
               <GameCard game={g as any} />
-            </React.Fragment>
+            </div>
           )
         })}
       </div>

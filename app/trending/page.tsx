@@ -8,7 +8,7 @@ import GameCard from "@/components/GameCard"
 export default function TrendingPage() {
   const [likesTick, setLikesTick] = useState(0)
   useEffect(() => {
-    const onLikes = () => setLikesTick((n) => n + 1)
+    const onLikes = () => setLikesTick((n: number) => n + 1)
     window.addEventListener("likes:changed" as any, onLikes)
     return () => window.removeEventListener("likes:changed" as any, onLikes)
   }, [])
@@ -30,12 +30,12 @@ export default function TrendingPage() {
         <p className="text-neutral-600 text-sm">What players are enjoying right now.</p>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {items.map((g) => {
+        {items.map((g: any) => {
           const k = (g as any).slug ?? (g as any).id ?? g.title
           return (
-            <React.Fragment key={k}>
+            <div key={k}>
               <GameCard game={g as any} />
-            </React.Fragment>
+            </div>
           )
         })}
       </div>
