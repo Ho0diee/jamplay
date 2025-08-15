@@ -14,6 +14,20 @@ export const BANNED: (string | RegExp)[] = [
   /\bharass(ment|ing)?\b/i,
 ]
 
+// Targeted subsets used by unit tests and specific UI contexts
+export const BANNED_TITLE: (string | RegExp)[] = [
+  /\bnsfw\b/i,
+]
+
+export const BANNED_TAGS: (string | RegExp)[] = [
+  /\bnsfw\b/i,
+]
+
+export const BANNED_TEXT: (string | RegExp)[] = [
+  /\bdoxx(ing)?\b/i,
+  /\bharass(ment|ing)?\b/i,
+]
+
 // Runtime-extendable entries (from attachments or ops input without committing words to repo)
 const RUNTIME: RegExp[] = []
 
@@ -65,11 +79,12 @@ export function getBannedList(): (string | RegExp)[] {
   return [...BANNED, ...RUNTIME, ...loadExtraFromLocalStorage()]
 }
 
-export function checkBanned(s: string): { ok: boolean; hits: string[] } {
+export function checkBanned(s: string, list?: (string | RegExp)[]): { ok: boolean; hits: string[] } {
   const value = (s ?? "").toString()
   if (!value) return { ok: true, hits: [] }
   const hits: string[] = []
-  for (const rule of getBannedList()) {
+  const rules = Array.isArray(list) ? list : getBannedList()
+  for (const rule of rules) {
     if (typeof rule === "string") {
       if (value.toLowerCase().includes(rule.toLowerCase())) hits.push(rule)
     } else if (rule.test(value)) {

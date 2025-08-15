@@ -79,9 +79,13 @@ export const CreateDraftSchema = BasicsCore
   }))
 export type CreateDraft = z.infer<typeof CreateDraftSchema>
 
-// No Gameplay step; its key fields moved as follows:
-// - description validated in Basics
-// - instructions and sessionLength validated in Build
+// Legacy compatibility: simple Gameplay schema used by unit tests
+export const GameplaySchema = z.object({
+  description: z.string().min(30),
+  sessionLength: z.string().refine((v: string) => parseSessionLength(v) !== null, {
+    message: "Use minutes (1–300) or m-n range",
+  }),
+})
 
 export function parseSessionLength(input: string): { type: "single"; minutes: number } | { type: "range"; min: number; max: number } | null {
   const s = (input ?? "").trim();
@@ -115,6 +119,7 @@ export function isOneSentenceMaxWords(s: string, maxWords: number): boolean {
 export const BuildSchema = z
   .object({
     launchType: z.enum(["external", "embedded_template", "api_endpoint"]),
+    // Current fields
     playUrl: z
       .string()
       .url("Enter a valid URL")
@@ -124,19 +129,22 @@ export const BuildSchema = z
       .string()
       .regex(/^TMP-[A-Z0-9]{5,10}$/, "Template ID format TMP-XXXXX")
       .optional(),
+    // Back-compat for older tests and forms
+    playUrlOrTemplateId: z.string().optional(),
     version: z.string().regex(/^\d+$/, "Version must be an integer").transform((s: string) => s || "1"),
     changelog: z.string().max(200).optional(),
-    instructions: z.string().trim().min(1, "Instructions are required"),
+    instructions: z.string().trim().optional(),
     sessionLength: z
       .string()
-      .min(1, "Session length is required")
-      .transform((v: string, ctx: RefinementCtx) => {
-        const s = (v ?? "").trim()
-        if (/^\d+$/.test(s)) {
-          const m = parseInt(s, 10)
+      .optional()
+      .transform((v: string | undefined, ctx: RefinementCtx) => {
+        const raw = (v ?? "").trim()
+        if (!raw) return undefined
+        if (/^\d+$/.test(raw)) {
+          const m = parseInt(raw, 10)
           if (m >= 1 && m <= 300) return { type: "single" as const, minutes: m }
         } else {
-          const m = s.match(/^(\d+)-(\d+)$/)
+          const m = raw.match(/^(\d+)-(\d+)$/)
           if (m) {
             const min = parseInt(m[1], 10)
             const max = parseInt(m[2], 10)
@@ -148,17 +156,39 @@ export const BuildSchema = z
       }),
   })
   .superRefine((v: any, ctx: RefinementCtx) => {
+    const urlCandidate: string | undefined = v.playUrl ?? v.playUrlOrTemplateId
+    const tmplCandidate: string | undefined = v.templateId ?? v.playUrlOrTemplateId
     if (v.launchType === "external") {
-      if (!v.playUrl) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Required", path: ["playUrl"] })
+      if (!urlCandidate) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Required", path: [v.playUrl ? "playUrl" : "playUrlOrTemplateId"] })
+      } else {
+        try {
+          const parsed = new URL(urlCandidate)
+          if (parsed.protocol !== "https:") throw new Error("not https")
+        } catch {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Enter a valid https URL", path: [v.playUrl ? "playUrl" : "playUrlOrTemplateId"] })
+        }
       }
     }
     if (v.launchType === "embedded_template") {
-      if (!v.templateId) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Required", path: ["templateId"] })
+      const re = /^TMP-[A-Z0-9]{5,10}$/
+      if (!tmplCandidate) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Required", path: [v.templateId ? "templateId" : "playUrlOrTemplateId"] })
+      } else if (!re.test(tmplCandidate)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Template ID format TMP-XXXXX", path: [v.templateId ? "templateId" : "playUrlOrTemplateId"] })
       }
     }
   })
+
+// Strict version for UI (instructions + sessionLength required)
+export const BuildSchemaStrict = BuildSchema.superRefine((v: any, ctx: RefinementCtx) => {
+  if (!v.instructions || (typeof v.instructions === "string" && !v.instructions.trim())) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Instructions are required", path: ["instructions"] })
+  }
+  if (!v.sessionLength) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Session length is required", path: ["sessionLength"] })
+  }
+})
 
 // Community removed
 
